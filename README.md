@@ -69,3 +69,6 @@ Run the main script to train the CNN-LSTM model on the extracted anomaly segment
 - **Explainable AI (XAI):** Add methods to interpret model predictions, showing which sensor features are most indicative of a fault.  
 - **Real-World Data Validation:** Test the model on real-world pipeline data to validate its robustness.  
   
+## License
+This project is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+See the [LICENSE](LICENSE) file for details.
