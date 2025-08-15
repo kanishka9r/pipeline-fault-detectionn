@@ -57,10 +57,12 @@ The project uses a two-stage machine learning pipeline:
 Run the data generation scripts to create the synthetic data.  
 4. Train the autoencoder
 Run the script to train the LSTM Autoencoder on normal data.
-5. Extract anomaly segments  
+5. Normalize the dataset  
+Run the script to normalize the dataset on 0-1 scale.
+6. Extract anomaly segments  
 Use the autoencoder to find and extract anomalous segments from the fault data.  
-6. Train the multi-task model
-Run the main script to train the CNN-LSTM model on the extracted anomaly segments.
+7. Train the multi-task model
+Run the script to train the CNN-LSTM model on the extracted anomaly segments.
 
 ## Future Enhancements
 
