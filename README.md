@@ -50,7 +50,22 @@ The project uses a two-stage machine learning pipeline:
 1. Clone the repository:  
    ```bash
    git clone https://github.com/kanishka9r/pipeline-fault-detectionn.git
-2.Install dependencies:
- ```bash
+2. Install dependencies:  
+   ```bash  
    pip install -r requirements.txt
+3. Generate the dataset  
+Run the data generation scripts to create the synthetic data.  
+4. Train the autoencoder
+Run the script to train the LSTM Autoencoder on normal data.
+5. Extract anomaly segments  
+Use the autoencoder to find and extract anomalous segments from the fault data.  
+6. Train the multi-task model
+Run the main script to train the CNN-LSTM model on the extracted anomaly segments.
+
+## Future Enhancements
+
+- **Real-Time Monitoring:** Implement a system to process incoming data streams in real time.  
+- **Hyperparameter Tuning:** Use automated tools to optimize model hyperparameters for better performance.  
+- **Explainable AI (XAI):** Add methods to interpret model predictions, showing which sensor features are most indicative of a fault.  
+- **Real-World Data Validation:** Test the model on real-world pipeline data to validate its robustness.  
   
