@@ -10,7 +10,8 @@ from torch.utils.data import  DataLoader , TensorDataset , Subset
 from sklearn.metrics import classification_report, mean_absolute_error , confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import random
+from scipy.stats import skew, kurtosis
 
 # Constants
 DATA_DIR = "data/processed/anomaly_segments"  
@@ -20,6 +21,37 @@ NUM_EPOCHS = 50
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ALPHA = 0.5  # regression loss weight
 PATIENCE = 8  # early stopping patience on val loss
+SEED = 42
+
+# Set random seeds for reproducibility
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
+
+def get_statistical_features(segment):
+    features = []
+    for i in range(segment.shape[1]):
+        sensor_data = segment[:, i]
+        mean_val = np.mean(sensor_data)
+        std_val = np.std(sensor_data)
+        var_val = np.var(sensor_data)
+        rms_val = np.sqrt(np.mean(sensor_data**2))
+        
+        features.extend([mean_val, std_val, var_val, rms_val])
+    
+    return np.array(features).reshape(1, -1)
+
+def get_fft_features(segment):
+    fft_features = []
+    for i in range(segment.shape[1]):
+        sensor_data = segment[:, i]
+        fft_result = np.fft.fft(sensor_data)
+        fft_amplitude = np.abs(fft_result) / len(sensor_data)
+        fft_features.extend(fft_amplitude[:len(sensor_data)//2])
+    
+    return np.array(fft_features).reshape(1, -1)
 
 # Function to get label from filename
 def get_label_from_filename(filename):
@@ -47,7 +79,18 @@ def build_dataset_from_folder(data_dir):
         if feat.shape != (60, 3):
             # skip malformed segments
             continue
-        segments.append(feat)
+        statistical_features = get_statistical_features(feat)
+        fft_features = get_fft_features(feat)
+        # Repeat the feature arrays 60 times to match the number of rows in 'feat'
+        stat_features_repeated = np.repeat(statistical_features, 60, axis=0)
+        fft_features_repeated = np.repeat(fft_features, 60, axis=0)
+
+        # Concatenate the raw segment with the repeated feature arrays
+        combined_data = np.concatenate(
+            (feat, stat_features_repeated, fft_features_repeated), axis=1
+        )
+        segments.append(combined_data)  # shape (60, 3*4 + 3*30) = (60, 105)
+  
         # Get structured label
         raw_labels.append(get_label_from_filename(fname))
         # Calculate intensity as mean of 'Intensity' column
@@ -75,7 +118,7 @@ def build_dataset_from_folder(data_dir):
 
 # Define the CNN-LSTM model with multi-task learning
 class CNN_LSTM_MTL(nn.Module):
-    def __init__(self, input_size=3, cnn_channels=64, lstm_hidden=128, num_classes=19):
+    def __init__(self, input_size=105, cnn_channels=64, lstm_hidden=128, num_classes=19):
         super().__init__()
 
         # CNN layers
@@ -133,7 +176,7 @@ num_classes = len(label_encoder.classes_)
 print("Num samples:", N, "Num classes:", num_classes)
 
 #Model preparation
-model = CNN_LSTM_MTL(input_size=3, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(DEVICE)
+model = CNN_LSTM_MTL(input_size=105, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(DEVICE)
 cls_loss_fn = nn.CrossEntropyLoss()
 reg_loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
@@ -271,7 +314,7 @@ print(f"Regression MAE (intensity) on validation: {mae:.4f}")
 
 # Compute confusion matrix
 cm = confusion_matrix(all_true, all_pred)
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(15, 15))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=class_names, yticklabels=class_names)
 plt.xlabel('Predicted Label')
