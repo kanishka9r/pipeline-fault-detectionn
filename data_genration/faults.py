@@ -165,7 +165,7 @@ def generate_all_faults(n_samples=25):
                     generate_leak_fault(wid, mode=mode , intensity= intensity) ; wid += 1
                     generate_blockage_fault(wid , mode=mode , intensity = intensity) ; wid += 1
                     generate_temperature_fault(wid , mode=mode , intensity = intensity)   ; wid += 1
-    print(f"✅ All faults generated. Metadata saved at {METADATA_FILE}")
+    print(f" All faults generated. Metadata saved at {METADATA_FILE}")
 
 
 # Run the generation

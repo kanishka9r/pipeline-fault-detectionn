@@ -11,7 +11,7 @@ random.seed(42)
 np.random.seed(42)
 
 ROOT_DIR = "synthetic_data"
-METADATA_FILE = os.path.join(ROOT_DIR, "combined_metadata.csv")
+METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)            
 if not os.path.exists(METADATA_FILE):
     pd.DataFrame(columns=["sample_id", "fault_type", "intensity" , "mode", "file_path"]).to_csv(METADATA_FILE, index=False)
@@ -175,7 +175,7 @@ def generate_all_leak_blockage():
                     generate_combined_leak_blockage(wid, mode=mode , intensity = intensity) ; wid += 1
                     generate_leak_temp_vibration_fault(wid , mode =mode , intensity= intensity) ; wid +=1
                     generate_blockage_pressure_noise_fault(wid, mode=mode , intensity = intensity) ; wid += 1
-
+    print(f" All faults generated. Metadata saved at {METADATA_FILE}")
 #  generate all combinations
 if __name__ == "__main__":
     generate_all_leak_blockage()

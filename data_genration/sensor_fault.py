@@ -172,7 +172,7 @@ def generate_vibration_noise(sample_id, mode="random" , intensity="high"):
         "temperature": temperature,
         "label": label
     })
-    
+
     # Save data
     save_with_metadata(df, "vibration", "noise", mode, intensity , sample_id)   
 
@@ -185,7 +185,7 @@ def generate_sensor_fault_noise_dataset(n_samples=25):
                     generate_pressure_noise(wid, mode=mode , intensity = intensity)   ; wid += 1
                     generate_temperature_noise(wid, mode=mode , intensity = intensity) ; wid += 1
                     generate_vibration_noise(wid, mode=mode , intensity = intensity) ; wid += 1
-            
+    print(f" All faults generated. Metadata saved at {METADATA_FILE}")        
 # Run the generation
 if __name__ == "__main__":
     generate_sensor_fault_noise_dataset(n_samples=25)                        
