@@ -1,8 +1,8 @@
-# Ignore data folder
-data/
-
 # Ignore specific file
 extra.doc
 
 # Ignore model weights
 *.pt
+
+# Ignore temporary files
+synthetic_data/
