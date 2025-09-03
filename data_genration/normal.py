@@ -81,7 +81,7 @@ def generate_normal_2(uid):
 
 
 # run ALL generators
-def generate_normal_data(n_samples=600):
+def generate_normal_data(n_samples=675):
     for i in range(n_samples):
         generate_normal_1(i)
         generate_normal_2(i)
@@ -89,4 +89,4 @@ def generate_normal_data(n_samples=600):
 
 #Run the generation
 if __name__ == "__main__":
-    generate_normal_data(n_samples=600)
+    generate_normal_data(n_samples=675)
