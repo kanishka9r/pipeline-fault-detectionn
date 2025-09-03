@@ -10,21 +10,22 @@ N_SAMPLES = DURATION * SAMPLE_RATE
 random.seed(42)
 np.random.seed(42)
 
-ROOT_DIR = "synthetic_data"
-METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
+ROOT_DIR = os.path.join("..", "data", "problems", "combined")
+METADATA_FILE = os.path.join("..", "data", "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)            
 if not os.path.exists(METADATA_FILE):
-    pd.DataFrame(columns=["sample_id", "fault_type", "intensity" , "mode", "file_path"]).to_csv(METADATA_FILE, index=False)
+    pd.DataFrame(columns=["sample_id", "category" , "fault_type", "intensity" , "mode", "file_path"]).to_csv(METADATA_FILE, index=False)
 
 # save data with metadata
 def save_with_metadata(df, fault_type, mode, intensity ,uid):
-    out_dir = os.path.join(ROOT_DIR, "combined_faults")
+    out_dir = os.path.join(ROOT_DIR, fault_type, f"{intensity}", mode)
     os.makedirs(out_dir, exist_ok=True)
     filename = f"{fault_type}_{mode}_{intensity}_{uid:04d}.csv"
     file_path = os.path.join(out_dir, filename)
     df.to_csv(file_path, index=False)
     row = {
         "sample_id": f"{fault_type}_{mode}_{uid:04d}",
+        "category": "combined",
         "fault_type": fault_type,
         "mode": mode,
         "intensity": intensity,
@@ -46,7 +47,7 @@ def get_fault_window(mode):
         raise ValueError("Invalid mode")
     
 # Function to generate combined leak and blockage fault    
-def generate_combined_leak_blockage(sample_id, intensity = "high ", mode="random"):
+def generate_combined_leak_blockage(sample_id, intensity = "high", mode="random"):
     time = np.arange(N_SAMPLES)
 
     # scale variation
@@ -122,7 +123,7 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="random", intensity="
     })
 
     #save data
-    save_with_metadata(df , " blockage+pressure" , intensity , mode , sample_id)
+    save_with_metadata(df , "blockage+pressure" , mode , intensity , sample_id)
 
 
 # Function to generate leak, temperature, and vibration fault
@@ -163,7 +164,7 @@ def generate_leak_temp_vibration_fault(sample_id, mode="random", intensity="high
     })
 
     # Save data
-    save_with_metadata(df , "leak+temp+vib" , intensity , mode , sample_id)
+    save_with_metadata(df , "leak+temp+vib" , mode , intensity , sample_id)
 
 
 # Function to generate all combinations of leak and blockage faults

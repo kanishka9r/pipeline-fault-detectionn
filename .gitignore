@@ -5,4 +5,4 @@ extra.doc
 *.pt
 
 # Ignore temporary files
-synthetic_data/
+data/

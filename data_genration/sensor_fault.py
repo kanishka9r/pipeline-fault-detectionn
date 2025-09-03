@@ -10,23 +10,23 @@ N_SAMPLES = DURATION * SAMPLE_RATE
 np.random.seed(42)
 random.seed(42)
 
-ROOT_DIR = "synthetic_data"
-METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
+ROOT_DIR = os.path.join("..", "data", "problems", "sensor_fault")
+METADATA_FILE = os.path.join("..", "data", "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)
 if not os.path.exists(METADATA_FILE):
-    pd.DataFrame(columns=["sample_id", "sensor_type", "fault_type",  "mod" , "intensity",  "file_path"]).to_csv(METADATA_FILE, index=False)
+    pd.DataFrame(columns=["sample_id","category" , "sensor",  "mode" , "intensity",  "file_path"]).to_csv(METADATA_FILE, index=False)
 
 # save data with metadata
-def save_with_metadata(df, sensor_type, fault_type, mode,intensity ,  uid):
-    out_dir = os.path.join(ROOT_DIR, "sensor_faults")
+def save_with_metadata(df, sensor, mode,intensity ,  uid):
+    out_dir = os.path.join(ROOT_DIR, sensor, intensity, mode)
     os.makedirs(out_dir, exist_ok=True)
-    filename = f"{sensor_type}_{fault_type}_{mode}_{intensity}_{uid:04d}.csv"
+    filename = f"{sensor}_{mode}_{intensity}_{uid:04d}.csv"
     file_path = os.path.join(out_dir, filename)
     df.to_csv(file_path, index=False)
     row = {
-        "sample_id": f"{sensor_type}_{fault_type}_{mode}_{uid:04d}",
-        "sensor_type": sensor_type,
-        "fault_type": fault_type,
+        "sample_id": f"{sensor}_{mode}_{uid:04d}",
+        "category": "sensor_fault",
+        "sensor": sensor,
         "mode": mode,
         "intensity": intensity,
         "file_path": file_path
@@ -87,7 +87,7 @@ def generate_pressure_noise(sample_id, mode="random" , intensity="high"):
     })
 
     # Save data
-    save_with_metadata(df, "pressure", "noise", mode, intensity , sample_id)
+    save_with_metadata(df, "pressure", mode, intensity , sample_id)
 
 
 # Temperature Noise Fault
@@ -131,7 +131,7 @@ def generate_temperature_noise(sample_id, mode="random" , intensity="high"):
     })
 
     # Save data
-    save_with_metadata(df, "temperature", "noise", mode, intensity , sample_id)
+    save_with_metadata(df, "temperature", mode, intensity , sample_id)
 
 
 # Vibration Noise Fault
@@ -174,7 +174,7 @@ def generate_vibration_noise(sample_id, mode="random" , intensity="high"):
     })
 
     # Save data
-    save_with_metadata(df, "vibration", "noise", mode, intensity , sample_id)   
+    save_with_metadata(df, "vibration", mode, intensity , sample_id)   
 
 # Function to generate noise faults
 def generate_sensor_fault_noise_dataset(n_samples=25):
@@ -185,7 +185,7 @@ def generate_sensor_fault_noise_dataset(n_samples=25):
                     generate_pressure_noise(wid, mode=mode , intensity = intensity)   ; wid += 1
                     generate_temperature_noise(wid, mode=mode , intensity = intensity) ; wid += 1
                     generate_vibration_noise(wid, mode=mode , intensity = intensity) ; wid += 1
-    print(f" All faults generated. Metadata saved at {METADATA_FILE}")        
+    print(f" All sensor faults generated. Metadata saved at {METADATA_FILE}")    
 # Run the generation
 if __name__ == "__main__":
     generate_sensor_fault_noise_dataset(n_samples=25)                        

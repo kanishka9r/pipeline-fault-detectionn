@@ -10,23 +10,23 @@ N_SAMPLES = DURATION * SAMPLE_RATE
 np.random.seed(42)
 random.seed(42)
 
-ROOT_DIR = "synthetic_data"
-METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
+ROOT_DIR = os.path.join("..", "data", "normal")
+METADATA_FILE = os.path.join("..", "data", "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)
 if not os.path.exists(METADATA_FILE):
     pd.DataFrame(columns=["sample_id", "category", "subtype", "mode", "intensity","file_path"]).to_csv(METADATA_FILE, index=False)
 
 # Save normal data with metadata
-def save_normal_with_metadata(df, subtype, uid):
-    out_dir = os.path.join(ROOT_DIR, "normal", subtype)
+def save_normal_with_metadata(df, uid , subtype):
+    out_dir = os.path.join(ROOT_DIR, subtype)
     os.makedirs(out_dir, exist_ok=True)
-    filename = f"normal_{subtype}_{uid:04d}.csv"
+    filename = f"{subtype}_{uid:04d}.csv"
     file_path = os.path.join(out_dir, filename)
     df.to_csv(file_path, index=False)
     row = {
-        "sample_id": f"normal_{subtype}_{uid:04d}",
+        "sample_id": f"{subtype}_{uid:04d}",
         "category": "normal",
-        "subtype": subtype, 
+        "fault_type": "NA", 
         "mode": "NA",
         "intensity": "NA",
         "file_path": file_path
@@ -54,7 +54,7 @@ def generate_normal_1(uid):
     })
 
     # Save the data
-    save_normal_with_metadata(df, "normal_1", uid)
+    save_normal_with_metadata(df, uid , "normal_1")
 
 
 # Function to generate normal_2 (fluctuating normal data)
@@ -77,7 +77,7 @@ def generate_normal_2(uid):
     })
 
     # Save the data
-    save_normal_with_metadata(df, "normal_2", uid)
+    save_normal_with_metadata(df, uid , "normal_2")
 
 
 # run ALL generators

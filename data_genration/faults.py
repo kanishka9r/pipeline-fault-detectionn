@@ -10,21 +10,22 @@ N_SAMPLES = DURATION * SAMPLE_RATE
 np.random.seed(42)
 random.seed(42)
 
-ROOT_DIR = "synthetic_data"
-METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
+ROOT_DIR = os.path.join("..", "data", "problems", "faults")
+METADATA_FILE = os.path.join("..", "data", "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)
 if not os.path.exists(METADATA_FILE):
-    pd.DataFrame(columns=["sample_id", "fault_type", "mode", "intensity" ,"file_path"]).to_csv(METADATA_FILE, index=False)
+    pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(METADATA_FILE, index=False)
 
 # save data with metadata
 def save_with_metadata(df, fault_type,  mode, intensity , uid):
-    out_dir = os.path.join(ROOT_DIR, "faults", fault_type,f"{intensity}",  mode)
+    out_dir = os.path.join(ROOT_DIR, fault_type,f"{intensity}",  mode)
     os.makedirs(out_dir, exist_ok=True)
     filename = f"{fault_type}_{mode}_{intensity}_{uid:04d}.csv"
     file_path = os.path.join(out_dir, filename)
     df.to_csv(file_path, index=False)
     row = {
-        "sample_id": f"{fault_type}_{mode}_{uid:04d}",
+        "sample_id": f"{fault_type}_{mode}_{intensity}_{uid:04d}",
+        "category": "fault",
         "fault_type": fault_type,
         "mode": mode,
         "intensity": intensity,
