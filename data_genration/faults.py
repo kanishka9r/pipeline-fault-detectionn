@@ -10,7 +10,6 @@ N_SAMPLES = DURATION * SAMPLE_RATE
 np.random.seed(42)
 random.seed(42)
 
-
 ROOT_DIR = "synthetic_data"
 METADATA_FILE = os.path.join(ROOT_DIR, "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)
@@ -58,7 +57,7 @@ def generate_leak_fault(sample_id, mode="random" , intensity="high"):
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
     
-     # Fault effect depends on intensity
+     # Generate pressure_drop and vibration_rise based on intensity 
     if intensity == "low":
         pressure_drop = np.linspace(1.0, 5.0, fault_len)
         vibration_rise = np.linspace(0.3, 0.8, fault_len)
@@ -79,6 +78,7 @@ def generate_leak_fault(sample_id, mode="random" , intensity="high"):
           "temperature": temperature, 
           "label": label
     })
+
     # Save the data
     save_with_metadata(df, "leak", mode, intensity , sample_id)
 
@@ -102,7 +102,6 @@ def generate_blockage_fault(sample_id, mode="random" , intensity="high"):
     else:
        pressure_spike = np.linspace(0, np.random.uniform(15, 25), fault_len)
        vibration_spike = np.linspace(0, np.random.uniform(3, 6), fault_len)
-
 
     # Apply the fault
     pressure[fault_start:fault_end] += pressure_spike
