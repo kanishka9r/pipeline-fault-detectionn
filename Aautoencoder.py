@@ -30,12 +30,12 @@ def normalize_and_save(data, out_path):
     df_normalized = pd.DataFrame(normalized, columns=['vibration', 'pressure', 'temperature'])
     df_normalized.to_csv(out_path, index=False)
     print(f"Saved normalized data to: {out_path}")
-    joblib.dump(scaler, 'data/processed/minmax_scaler.pkl')
-    print("Saved MinMaxScaler to: data/processed/minmax_scaler.pkl")
+    joblib.dump(scaler, 'data/scalers/minmax_scaler.pkl')
+    print("Saved MinMaxScaler to: data/scalers/minmax_scaler.pkl")
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(device)
 
 # Define LSTM Autoencoder
 class LSTMAutoencoder(nn.Module):
@@ -44,7 +44,8 @@ class LSTMAutoencoder(nn.Module):
         self.encoder_lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.bottleneck = nn.Linear(hidden_size, latent_size)
         self.decoder_input = nn.Linear(latent_size, hidden_size)
-        self.decoder_lstm = nn.LSTM(hidden_size, input_size, batch_first=True)
+        self.decoder_lstm = nn.LSTM(hidden_size, hidden_size, batch_first=True)
+        self.output_layer = nn.Linear(hidden_size, input_size)
 
     def forward(self, x):
         # Encode
@@ -54,16 +55,17 @@ class LSTMAutoencoder(nn.Module):
         # Decode
         dec_input = self.decoder_input(bottleneck)
         dec_out, _ = self.decoder_lstm(dec_input)
+        dec_out = self.output_layer(dec_out)
         return dec_out    
 
 
 # Train the autoencoder on the normal data
-def train_autoencoder(model, data, epochs=20, batch_size=32, lr=1e-3):
+def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
     dataset = TensorDataset(torch.tensor(data, dtype=torch.float32))
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
+    criterion = nn.MSELoss(reduction="mean")
     
     model.train()
     for epoch in range(epochs):
@@ -88,7 +90,7 @@ def compute_reconstruction_error(model, data):
     return errors
 
 # Determine threshold for anomaly detection
-def determine_threshold(errors, method='percentile', value=95):
+def determine_threshold(errors, method='percentile', value=97):
     if method == 'percentile':
         return np.percentile(errors, value)
     elif method == 'max':
@@ -99,25 +101,26 @@ def determine_threshold(errors, method='percentile', value=95):
 # run the main process
 if __name__ == "__main__":
 
-    data_path = 'data/synthetic/normal'
-    out_csv = 'data/processed/normal_combined.csv'
+    data_path = 'data/normal'
+    out_csv = 'data/normal/normal_combined.csv'
 
     # Load and normalize normal data
     normal_data = load_and_combine_normal_data(data_path)
     normalize_and_save(normal_data, out_csv)   
     # Load normalized data
-    df = pd.read_csv('data/processed/normal_combined.csv')
+    df = pd.read_csv('data/normal/normal_combined.csv')
     full_data = df.values
 
     # Reshape into sequences of 600 (10 min segments at 1Hz)
     SEQ_LEN = 600
     num_seqs = full_data.shape[0] // SEQ_LEN
     data_seq = full_data[:num_seqs * SEQ_LEN].reshape(num_seqs, SEQ_LEN, 3)
-    train_data, val_data = train_test_split(data_seq, test_size=0.2, random_state=42)
+    split_idx = int(0.8 * len(data_seq))  # 80% train, 20% val
+    train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
 
     # Initialize and train autoencoder
     model = LSTMAutoencoder()
-    train_autoencoder(model, train_data, epochs=20)
+    train_autoencoder(model, train_data, epochs=50)
 
     # Save model
     torch.save(model.state_dict(), "autoencoder.pt")
@@ -127,12 +130,12 @@ if __name__ == "__main__":
 
     # Set threshold
     flat_errors = errors.flatten()
-    threshold = determine_threshold(flat_errors, method='percentile', value=95)
+    threshold = determine_threshold(flat_errors, method='percentile', value=97)
     print("Anomaly threshold set to:", threshold)
     print("Min error:", np.min(errors))
     print("Max error:", np.max(errors))
     print("Mean error:", np.mean(errors))
-    print("95th percentile:", np.percentile(errors, 95))
+    print("97th percentile:", np.percentile(errors, 97))
 
     # Evaluate false positives on normal validation set
     anomalies = flat_errors > threshold
