@@ -13,8 +13,9 @@ random.seed(42)
 ROOT_DIR = os.path.join("..", "data", "problems", "faults")
 METADATA_FILE = os.path.join("..", "data", "metadata.csv")
 os.makedirs(ROOT_DIR, exist_ok=True)
-if not os.path.exists(METADATA_FILE):
-    pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(METADATA_FILE, index=False)
+if  os.path.exists(METADATA_FILE):
+    os.remove(METADATA_FILE)
+pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(METADATA_FILE, index=False)
 
 # save data with metadata
 def save_with_metadata(df, fault_type,  mode, intensity , uid):
@@ -37,24 +38,26 @@ def save_with_metadata(df, fault_type,  mode, intensity , uid):
 def get_fault_window(mode):
     if mode == "start":
         return 0, N_SAMPLES
-    elif mode == "random":
-        start = random.randint(N_SAMPLES // 3, N_SAMPLES // 2)
-        return start, N_SAMPLES
     elif mode == "recover":
         start = random.randint(N_SAMPLES // 4, N_SAMPLES // 3)
-        return start, start + N_SAMPLES // 3
+        end = min(start + N_SAMPLES // 3, N_SAMPLES)
+        return start, end
     else:
         raise ValueError("Invalid mode")
-
+    
+def generate_baseline():
+    return (
+        np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=N_SAMPLES),  # vibration
+        np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=N_SAMPLES),     # pressure
+        np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=N_SAMPLES),     # temperature
+        np.array(["normal"]*N_SAMPLES)  # label
+    )   
+        
 # Leak Fault
-def generate_leak_fault(sample_id, mode="random" , intensity="high"):
+def generate_leak_fault(sample_id, mode="start" , intensity="high"):
     time = np.arange(N_SAMPLES)
 
-    # scale variation
-    vibration = np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=N_SAMPLES)
-    pressure  = np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=N_SAMPLES)
-    temperature = np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=N_SAMPLES)
-    label = np.array(["normal"] * N_SAMPLES)
+    vibration , pressure , temperature , label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
     
@@ -66,9 +69,23 @@ def generate_leak_fault(sample_id, mode="random" , intensity="high"):
         pressure_drop = np.linspace(5.0, 15.0, fault_len)
         vibration_rise = np.linspace(1.0, 3.0, fault_len)
 
+    # Add small random jitter for realism
+    pressure_jitter = np.random.normal(0, 0.2, fault_len)
+    vibration_jitter = np.random.normal(0, 0.1, fault_len)    
+
     # Apply the fault
-    pressure[fault_start:fault_end] -= pressure_drop
-    vibration[fault_start:fault_end] += vibration_rise
+    if mode == "start":
+        #gradually increase till end
+        pressure[fault_start:fault_end] -= pressure_drop + pressure_jitter
+        vibration[fault_start:fault_end] += vibration_rise + vibration_jitter
+    elif mode == "recover":
+        peak_idx = fault_len // 2
+        # rise to peak
+        pressure[fault_start:fault_start+peak_idx] -= pressure_drop[:peak_idx] + pressure_jitter[:peak_idx]
+        vibration[fault_start:fault_start+peak_idx] += vibration_rise[:peak_idx] + vibration_jitter[:peak_idx]
+        # fall after peak
+        pressure[fault_start+peak_idx:fault_end] += pressure_drop[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
+        vibration[fault_start+peak_idx:fault_end] -= vibration_rise[peak_idx:][::-1] + vibration_jitter[peak_idx:][::-1]
     label[fault_start:fault_end] = "leak"
 
    # Create a DataFrame with all columns
@@ -85,14 +102,10 @@ def generate_leak_fault(sample_id, mode="random" , intensity="high"):
 
 
 # Blockage Fault
-def generate_blockage_fault(sample_id, mode="random" , intensity="high"):
+def generate_blockage_fault(sample_id, mode="start" , intensity="high"):
     time = np.arange(N_SAMPLES)
 
-    # scale variation
-    vibration = np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=N_SAMPLES)
-    pressure  = np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=N_SAMPLES)
-    temperature = np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=N_SAMPLES)
-    label = np.array(["normal"] * N_SAMPLES)
+    vibration , pressure , temperature , label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
 
@@ -104,9 +117,24 @@ def generate_blockage_fault(sample_id, mode="random" , intensity="high"):
        pressure_spike = np.linspace(0, np.random.uniform(15, 25), fault_len)
        vibration_spike = np.linspace(0, np.random.uniform(3, 6), fault_len)
 
+    # Add small random jitter for realism
+    pressure_jitter = np.random.normal(0, 0.5, fault_len)
+    vibration_jitter = np.random.normal(0, 0.2, fault_len)   
+
     # Apply the fault
-    pressure[fault_start:fault_end] += pressure_spike
-    vibration[fault_start:fault_end] += vibration_spike
+    if mode == "start":
+        # gradually increase till end
+        pressure[fault_start:fault_end] += pressure_spike + pressure_jitter
+        vibration[fault_start:fault_end] += vibration_spike + vibration_jitter
+    elif mode == "recover":
+        peak_idx = fault_len // 2
+        # rise to peak
+        pressure[fault_start:fault_start+peak_idx] += pressure_spike[:peak_idx] + pressure_jitter[:peak_idx]
+        vibration[fault_start:fault_start+peak_idx] += vibration_spike[:peak_idx] + vibration_jitter[:peak_idx]
+        # fall after peak
+        pressure[fault_start+peak_idx:fault_end] -= pressure_spike[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
+        vibration[fault_start+peak_idx:fault_end] -= vibration_spike[peak_idx:][::-1] + vibration_jitter[peak_idx:][::-1]
+
     label[fault_start:fault_end] = "blockage"
 
     # Create a DataFrame with all columns
@@ -122,14 +150,10 @@ def generate_blockage_fault(sample_id, mode="random" , intensity="high"):
     save_with_metadata(df, "blockage", mode, intensity , sample_id)
 
 # Temperature Fault 
-def generate_temperature_fault(sample_id, mode="random" , intensity="high"):
+def generate_temperature_fault(sample_id, mode="start" , intensity="high"):
     time = np.arange(N_SAMPLES)
 
-    #scale variation
-    vibration = np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=N_SAMPLES)
-    pressure  = np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=N_SAMPLES)
-    temperature = np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=N_SAMPLES)
-    label = np.array(["normal"] * N_SAMPLES)
+    vibration , pressure , temperature , label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
 
@@ -140,10 +164,25 @@ def generate_temperature_fault(sample_id, mode="random" , intensity="high"):
     else:
        temp_rise = np.linspace(0, np.random.uniform(20, 40), fault_len)
        pressure_drop = np.linspace(3, 6, fault_len)
+    
+    # Add small random jitter for realism
+    temp_jitter = np.random.normal(0, 0.5, fault_len)
+    pressure_jitter = np.random.normal(0, 0.2, fault_len)
 
     # Apply the fault
-    temperature[fault_start:fault_end] += temp_rise
-    pressure[fault_start:fault_end] -= pressure_drop
+    if mode == "start" :
+        #gradually increase till end
+        temperature[fault_start:fault_end] += temp_rise + temp_jitter
+        pressure[fault_start:fault_end] -= pressure_drop + pressure_jitter
+    elif mode == "recover":
+        peak_idx = fault_len // 2
+        # rise to peak
+        temperature[fault_start:fault_start + peak_idx] += temp_rise[:peak_idx] + temp_jitter[:peak_idx]
+        pressure[fault_start:fault_start + peak_idx] -= pressure_drop[:peak_idx] + pressure_jitter[:peak_idx]
+        # fall after peak
+        temperature[fault_start + peak_idx:fault_end] -= temp_rise[peak_idx:][::-1] + temp_jitter[peak_idx:][::-1]
+        pressure[fault_start + peak_idx:fault_end] += pressure_drop[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
+
     label[fault_start:fault_end] = "temperature_fault"
 
     # Create a DataFrame with all columns
@@ -160,7 +199,7 @@ def generate_temperature_fault(sample_id, mode="random" , intensity="high"):
     # Run All Generators
 def generate_all_faults(n_samples=25):
     wid = 1
-    for mode in [ "start" , "random", "recover" ]:
+    for mode in [ "start" , "recover" ]:
             for intensity in ["low", "high"]:
                 for _ in range(n_samples):
                     generate_leak_fault(wid, mode=mode , intensity= intensity) ; wid += 1
