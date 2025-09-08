@@ -80,14 +80,23 @@ def generate_pressure_noise(sample_id, mode="start" , intensity="high"):
         pressure[start:end] = np.linspace(pres_loc, noise_loc, fault_len) \
                               + np.random.normal(0, noise_scale, fault_len)
     elif mode == "recover":
-        # Rise to peak
-        peak_idx = fault_len // 2
-        fall_len = fault_len - peak_idx
-        pressure[start:start+peak_idx] = np.linspace(pres_loc, noise_loc, peak_idx) \
-                                         + np.random.normal(0, noise_scale, peak_idx)
-        # Fall back to baseline
-        pressure[start+peak_idx:end] = np.linspace(noise_loc, pres_loc, fall_len) \
-                                       + np.random.normal(0, noise_scale, fall_len)
+        # Define rise, peak, fall segments
+        rise_len = fault_len // 3
+        peak_len = fault_len // 3
+        fall_len = fault_len - rise_len - peak_len
+    
+        # Rise gradually from baseline to peak
+        pressure[start:start+rise_len] = np.linspace(pres_loc, noise_loc, rise_len) + \
+                                     np.random.normal(0, noise_scale*0.5, rise_len)
+    
+        # Slight fluctuation around peak (no flat hold)
+        pressure[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) + \
+                                                       np.random.normal(0, noise_scale, peak_len)
+    
+        # Fall gradually back to baseline
+        pressure[start+rise_len+peak_len:end] = np.linspace(noise_loc, pres_loc, fall_len) + \
+                                            np.random.normal(0, noise_scale*0.5, fall_len)
+
     label[start:end] = "pressure_noise"
 
     # Create a DataFrame with all columns
@@ -138,14 +147,23 @@ def generate_temperature_noise(sample_id, mode="start" , intensity="high"):
         temperature[start:end] = np.linspace(temp_loc, noise_loc, fault_len) \
                               + np.random.normal(0, noise_scale, fault_len)
     elif mode == "recover":
-        # Rise to peak
-        peak_idx = fault_len // 2
-        fall_len = fault_len - peak_idx
-        temperature[start:start+peak_idx] = np.linspace(temp_loc, noise_loc, peak_idx) \
-                                            + np.random.normal(0, noise_scale, peak_idx)
-        # Fall back to baseline
-        temperature[start+peak_idx:end] = np.linspace(noise_loc, temp_loc, fall_len) \
-                                          + np.random.normal(0, noise_scale, fall_len)
+        # Define rise, peak, fall segments
+        rise_len = fault_len // 3
+        peak_len = fault_len // 3
+        fall_len = fault_len - rise_len - peak_len
+    
+        # Rise gradually from baseline to peak
+        temperature[start:start+rise_len] = np.linspace(temp_loc, noise_loc, rise_len) + \
+                                     np.random.normal(0, noise_scale*0.5, rise_len)
+    
+        # Slight fluctuation around peak (no flat hold)
+        temperature[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) + \
+                                                       np.random.normal(0, noise_scale, peak_len)
+    
+        # Fall gradually back to baseline
+        temperature[start+rise_len+peak_len:end] = np.linspace(noise_loc, temp_loc, fall_len) + \
+                                            np.random.normal(0, noise_scale*0.5, fall_len)
+
     label[start:end] = "temperature_noise"
 
     # Create a DataFrame with all columns
@@ -195,14 +213,23 @@ def generate_vibration_noise(sample_id, mode="start" , intensity="high"):
         vibration[start:end] = np.linspace(vib_loc, noise_loc, fault_len) \
                               + np.random.normal(0, noise_scale, fault_len)
     elif mode == "recover":
-        # Rise to peak
-        peak_idx = fault_len // 2
-        fall_len = fault_len - peak_idx
-        vibration[start:start+peak_idx] = np.linspace(vib_loc, noise_loc, peak_idx) \
-                                          + np.random.normal(0, noise_scale, peak_idx)
-        # Fall back to baseline
-        vibration[start+peak_idx:end] = np.linspace(noise_loc, vib_loc, fall_len) \
-                                        + np.random.normal(0, noise_scale, fall_len)
+        # Define rise, peak, fall segments
+        rise_len = fault_len // 3
+        peak_len = fault_len // 3
+        fall_len = fault_len - rise_len - peak_len
+
+        # Rise gradually from baseline to peak
+        vibration[start:start+rise_len] = np.linspace(vib_loc, noise_loc, rise_len) + \
+                                     np.random.normal(0, noise_scale*0.5, rise_len)  
+        
+        # Slight fluctuation around peak (no flat hold)
+        vibration[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) + \
+                                                       np.random.normal(0, noise_scale, peak_len)   
+         
+        # Fall gradually back to baseline
+        vibration[start+rise_len+peak_len:end] = np.linspace(noise_loc, vib_loc, fall_len) + \
+                                            np.random.normal(0, noise_scale*0.5, fall_len)
+        
     label[start:end] = "vibration_noise"
 
     # Create a DataFrame with all columns

@@ -54,147 +54,158 @@ def generate_baseline():
     )   
         
 # Leak Fault
-def generate_leak_fault(sample_id, mode="start" , intensity="high"):
+def generate_leak_fault(sample_id, mode="start", intensity="high"):
     time = np.arange(N_SAMPLES)
 
-    vibration , pressure , temperature , label = generate_baseline()
+    vibration, pressure, temperature, label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
-    
-     # Generate pressure_drop and vibration_rise based on intensity 
+
+    # Generate pressure_drop and vibration_rise based on intensity 
     if intensity == "low":
-        pressure_drop = np.linspace(1.0, 5.0, fault_len)
-        vibration_rise = np.linspace(0.3, 0.8, fault_len)
+        max_pressure_drop = 5.0
+        max_vibration_rise = 0.8
     else:  # high
-        pressure_drop = np.linspace(5.0, 15.0, fault_len)
-        vibration_rise = np.linspace(1.0, 3.0, fault_len)
+        max_pressure_drop = 15.0
+        max_vibration_rise = 3.0
 
-    # Add small random jitter for realism
-    pressure_jitter = np.random.normal(0, 0.2, fault_len)
-    vibration_jitter = np.random.normal(0, 0.1, fault_len)    
+    # Jitter
+    pressure_jitter = np.random.normal(0, 0.1, fault_len)
+    vibration_jitter = np.random.normal(0, 0.05, fault_len)
 
-    # Apply the fault
     if mode == "start":
-        #gradually increase till end
-        pressure[fault_start:fault_end] -= pressure_drop + pressure_jitter
-        vibration[fault_start:fault_end] += vibration_rise + vibration_jitter
-    elif mode == "recover":
-        peak_idx = fault_len // 2
-        # rise to peak
-        pressure[fault_start:fault_start+peak_idx] -= pressure_drop[:peak_idx] + pressure_jitter[:peak_idx]
-        vibration[fault_start:fault_start+peak_idx] += vibration_rise[:peak_idx] + vibration_jitter[:peak_idx]
-        # fall after peak
-        pressure[fault_start+peak_idx:fault_end] += pressure_drop[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
-        vibration[fault_start+peak_idx:fault_end] -= vibration_rise[peak_idx:][::-1] + vibration_jitter[peak_idx:][::-1]
-    label[fault_start:fault_end] = "leak"
+        # simple ramp up until end
+        pressure[fault_start:fault_end] -= np.linspace(0, max_pressure_drop, fault_len) + pressure_jitter
+        vibration[fault_start:fault_end] += np.linspace(0, max_vibration_rise, fault_len) + vibration_jitter
+        label[fault_start:fault_end] = "leak"
 
-   # Create a DataFrame with all columns
-    df =  pd.DataFrame({
+    elif mode == "recover":
+       up_len = int(fault_len * 0.4)
+       down_len = fault_len - up_len
+
+    # 1. Ramp up (baseline → peak)
+       pressure[fault_start:fault_start+up_len] -= np.linspace(0, max_pressure_drop, up_len) + pressure_jitter[:up_len]
+       vibration[fault_start:fault_start+up_len] += np.linspace(0, max_vibration_rise, up_len ) + vibration_jitter[:up_len]
+
+    # 2. Ramp down (peak → baseline)
+       pressure[fault_start+up_len:fault_end] -= np.linspace(max_pressure_drop, 0, down_len) + pressure_jitter[up_len:]
+       vibration[fault_start+up_len:fault_end] += np.linspace(max_vibration_rise, 0, down_len) + vibration_jitter[up_len:]
+
+    # Labels
+       label[fault_start:fault_end] = "leak"
+
+    # DataFrame
+    df = pd.DataFrame({
         "time": time,
-          "vibration": vibration, 
-          "pressure": pressure, 
-          "temperature": temperature, 
-          "label": label
-    })
-
-    # Save the data
-    save_with_metadata(df, "leak", mode, intensity , sample_id)
-
-
-# Blockage Fault
-def generate_blockage_fault(sample_id, mode="start" , intensity="high"):
-    time = np.arange(N_SAMPLES)
-
-    vibration , pressure , temperature , label = generate_baseline()
-    fault_start, fault_end = get_fault_window(mode)
-    fault_len = fault_end - fault_start
-
-    # Generate pressure and vibration spike based on intensity 
-    if intensity == "low":
-      pressure_spike = np.linspace(0, np.random.uniform(5, 10), fault_len)
-      vibration_spike = np.linspace(0, np.random.uniform(1, 2), fault_len)
-    else:
-       pressure_spike = np.linspace(0, np.random.uniform(15, 25), fault_len)
-       vibration_spike = np.linspace(0, np.random.uniform(3, 6), fault_len)
-
-    # Add small random jitter for realism
-    pressure_jitter = np.random.normal(0, 0.5, fault_len)
-    vibration_jitter = np.random.normal(0, 0.2, fault_len)   
-
-    # Apply the fault
-    if mode == "start":
-        # gradually increase till end
-        pressure[fault_start:fault_end] += pressure_spike + pressure_jitter
-        vibration[fault_start:fault_end] += vibration_spike + vibration_jitter
-    elif mode == "recover":
-        peak_idx = fault_len // 2
-        # rise to peak
-        pressure[fault_start:fault_start+peak_idx] += pressure_spike[:peak_idx] + pressure_jitter[:peak_idx]
-        vibration[fault_start:fault_start+peak_idx] += vibration_spike[:peak_idx] + vibration_jitter[:peak_idx]
-        # fall after peak
-        pressure[fault_start+peak_idx:fault_end] -= pressure_spike[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
-        vibration[fault_start+peak_idx:fault_end] -= vibration_spike[peak_idx:][::-1] + vibration_jitter[peak_idx:][::-1]
-
-    label[fault_start:fault_end] = "blockage"
-
-    # Create a DataFrame with all columns
-    df= pd.DataFrame({
-        "time": time, 
-        "vibration": vibration, 
-        "pressure": pressure, 
-        "temperature": temperature, 
+        "vibration": vibration,
+        "pressure": pressure,
+        "temperature": temperature,
         "label": label
     })
 
-    # Save the data
-    save_with_metadata(df, "blockage", mode, intensity , sample_id)
+    # Save
+    save_with_metadata(df, "leak", mode, intensity, sample_id)
 
-# Temperature Fault 
-def generate_temperature_fault(sample_id, mode="start" , intensity="high"):
+# Blockage Fault
+def generate_blockage_fault(sample_id, mode="start", intensity="high"):
     time = np.arange(N_SAMPLES)
 
-    vibration , pressure , temperature , label = generate_baseline()
+    vibration, pressure, temperature, label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
     fault_len = fault_end - fault_start
 
-    # Generate temperature rise and pressure drop based on intensity 
+    # Intensity-based spikes
     if intensity == "low":
-       temp_rise = np.linspace(0, np.random.uniform(5, 15), fault_len)
-       pressure_drop = np.linspace(1, 3, fault_len)
-    else:
-       temp_rise = np.linspace(0, np.random.uniform(20, 40), fault_len)
-       pressure_drop = np.linspace(3, 6, fault_len)
-    
-    # Add small random jitter for realism
+        max_pressure_spike = 8.0
+        max_vibration_spike = 1.5
+    else:  # high
+        max_pressure_spike = 20.0
+        max_vibration_spike = 5.0
+
+    # Jitter
+    pressure_jitter = np.random.normal(0, 0.5, fault_len)
+    vibration_jitter = np.random.normal(0, 0.2, fault_len)
+
+    if mode == "start":
+        # Ramp up continuously till end
+        pressure[fault_start:fault_end] += np.linspace(0, max_pressure_spike, fault_len) + pressure_jitter
+        vibration[fault_start:fault_end] += np.linspace(0, max_vibration_spike, fault_len) + vibration_jitter
+        label[fault_start:fault_end] = "blockage"
+
+    elif mode == "recover":
+        up_len = int(fault_len * 0.4)
+        down_len = fault_len - up_len
+
+        pressure[fault_start:fault_start+up_len] += np.linspace(0, max_pressure_spike, up_len) + pressure_jitter[:up_len]
+        vibration[fault_start:fault_start+up_len] += np.linspace(0, max_vibration_spike, up_len) + vibration_jitter[:up_len]
+
+        pressure[fault_start+up_len:fault_end] += np.linspace(max_pressure_spike, 0, down_len) + pressure_jitter[up_len:]
+        vibration[fault_start+up_len:fault_end] += np.linspace(max_vibration_spike, 0, down_len) + vibration_jitter[up_len:]
+
+        label[fault_start:fault_end] = "blockage"
+
+    # DataFrame
+    df = pd.DataFrame({
+        "time": time,
+        "vibration": vibration,
+        "pressure": pressure,
+        "temperature": temperature,
+        "label": label
+    })
+
+    # Save
+    save_with_metadata(df, "blockage", mode, intensity, sample_id)
+
+
+# Temperature Fault 
+def generate_temperature_fault(sample_id, mode="start", intensity="high"):
+    time = np.arange(N_SAMPLES)
+
+    vibration, pressure, temperature, label = generate_baseline()
+    fault_start, fault_end = get_fault_window(mode)
+    fault_len = fault_end - fault_start
+
+    # Intensity-based effect
+    if intensity == "low":
+        max_temp_rise = 10.0
+        max_pressure_drop = 2.0
+    else:  # high
+        max_temp_rise = 30.0
+        max_pressure_drop = 5.0    
+
+    # Jitter
     temp_jitter = np.random.normal(0, 0.5, fault_len)
     pressure_jitter = np.random.normal(0, 0.2, fault_len)
 
-    # Apply the fault
-    if mode == "start" :
-        #gradually increase till end
-        temperature[fault_start:fault_end] += temp_rise + temp_jitter
-        pressure[fault_start:fault_end] -= pressure_drop + pressure_jitter
+    if mode == "start":
+        # Ramp up continuously till end
+        temperature[fault_start:fault_end] += np.linspace(0, max_temp_rise, fault_len) + temp_jitter
+        pressure[fault_start:fault_end] -= np.linspace(0, max_pressure_drop, fault_len) + pressure_jitter
+        label[fault_start:fault_end] = "temperature_fault"
+
     elif mode == "recover":
-        peak_idx = fault_len // 2
-        # rise to peak
-        temperature[fault_start:fault_start + peak_idx] += temp_rise[:peak_idx] + temp_jitter[:peak_idx]
-        pressure[fault_start:fault_start + peak_idx] -= pressure_drop[:peak_idx] + pressure_jitter[:peak_idx]
-        # fall after peak
-        temperature[fault_start + peak_idx:fault_end] -= temp_rise[peak_idx:][::-1] + temp_jitter[peak_idx:][::-1]
-        pressure[fault_start + peak_idx:fault_end] += pressure_drop[peak_idx:][::-1] + pressure_jitter[peak_idx:][::-1]
+        up_len = int(fault_len * 0.4)
+        down_len = fault_len - up_len
 
-    label[fault_start:fault_end] = "temperature_fault"
+        temperature[fault_start:fault_start+up_len] += np.linspace(0, max_temp_rise, up_len) + temp_jitter[:up_len]
+        pressure[fault_start:fault_start+up_len] -= np.linspace(0, max_pressure_drop, up_len) + pressure_jitter[:up_len]
 
-    # Create a DataFrame with all columns
+        temperature[fault_start+up_len:fault_end] += np.linspace(max_temp_rise, 0, down_len) + temp_jitter[up_len:]
+        pressure[fault_start+up_len:fault_end] -= np.linspace(max_pressure_drop, 0, down_len) + pressure_jitter[up_len:]
+
+        label[fault_start:fault_end] = "temperature_fault"
+    # DataFrame
     df = pd.DataFrame({
         "time": time,
-          "vibration": vibration, 
-          "pressure": pressure, 
-          "temperature": temperature, 
-          "label": label
+        "vibration": vibration,
+        "pressure": pressure,
+        "temperature": temperature,
+        "label": label
     })
-    # Save the data
-    save_with_metadata(df, "temperature_fault",  mode, intensity ,sample_id)
+
+    # Save
+    save_with_metadata(df, "temperature_fault", mode, intensity, sample_id)
+
 
     # Run All Generators
 def generate_all_faults(n_samples=25):

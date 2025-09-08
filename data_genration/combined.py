@@ -75,18 +75,24 @@ def generate_combined_leak_blockage(sample_id, intensity = "high", mode="start")
     if mode == "start":
     # gradually apply fault from start to end
        pressure[start:end] -=  np.linspace(0, leak_drop, fault_len)  # leak drop
-       pressure[start:end] += np.linspace(0, blockage_spike, fault_len)  # blockage spike rises
-       vibration[start:end] += np.linspace(0, vib_rise, fault_len)       # vibration rise
+       pressure[start:end] += np.linspace(0, blockage_spike, fault_len) * 0.3  # blockage spike rises
+       pressure[start:end] += np.random.normal(0, 0.2, fault_len)
+       vibration[start:end] += np.linspace(0, vib_rise, fault_len) + np.random.normal(0, 0.1, fault_len)       # vibration rise
     elif mode == "recover":
-        peak_idx = fault_len // 2
+        rise_ratio = 0.4
+        peak_idx = int(fault_len * rise_ratio)
         fall_len = fault_len - peak_idx
-        # rise to peak
+
+        # Rise to peak
         pressure[start:start+peak_idx] -= np.linspace(0, leak_drop, peak_idx)
-        pressure[start:start+peak_idx] += np.linspace(0, blockage_spike, peak_idx)
-        vibration[start:start+peak_idx] += np.linspace(0, vib_rise, peak_idx)
-        # fall after peak
-        pressure[start+peak_idx:end] = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
-        vibration[start+peak_idx:end] = np.linspace(vibration[start+peak_idx-1], vibration[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
+        pressure[start:start+peak_idx] += np.linspace(0, blockage_spike, peak_idx) * 0.3
+        vibration[start:start+peak_idx] += np.linspace(0, vib_rise, peak_idx) + np.random.normal(0, 0.1, peak_idx)
+
+        # Gradual recovery after peak back to normal, with noise
+        pressure[start+peak_idx:end] -= np.linspace(leak_drop, 0, fall_len)
+        pressure[start+peak_idx:end] += np.linspace(blockage_spike*0.3, 0, fall_len)
+        vibration[start+peak_idx:end] -= np.linspace(vib_rise, 0, fall_len) + np.random.normal(0, 0.1, fall_len)
+
     label[start:end] = "leak+blockage"
 
     # After applying all fault changes
@@ -127,17 +133,21 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
     if mode == "start":
     # Gradually apply fault from start to end
        pressure[start:end] += np.linspace(0, spike_val, fault_len)
-       noise_loc = pressure[start:end].mean()
-       pressure[start:end] += np.random.normal(loc=noise_loc, scale=noise_scale, size=fault_len)
+       pressure[start:end] += np.random.normal(0 , scale=noise_scale, size=fault_len)
     elif mode == "recover":
-        peak_idx = fault_len // 2
+        rise_ratio = 0.4
+        peak_idx = int(fault_len * rise_ratio)
         fall_len = fault_len - peak_idx
-        # rise to peak
-        pressure[start:start+peak_idx] += np.linspace(0, spike_val, peak_idx)
-        noise_loc = pressure[start:start+peak_idx].mean()
-        pressure[start:start+peak_idx] += np.random.normal(loc=noise_loc, scale=noise_scale, size=peak_idx)
-        # fall after peak
-        pressure[start+peak_idx:end] = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
+
+        # Rise to peak with noise
+        pressure[start:start+peak_idx] += np.linspace(0, spike_val, peak_idx)  # deterministic trend
+        pressure[start:start+peak_idx] += np.random.normal(0, noise_scale, peak_idx)  # added noise
+
+        # Fall back to normal smoothly
+        fall_trend = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len)
+        pressure[start+peak_idx:end] = fall_trend + np.random.normal(0, noise_scale, fall_len)
+
+    label[start:end] = "blockage+pressure noise"
 
     # After applying all fault changes
     pressure = np.clip(pressure, 0, None)
@@ -183,16 +193,20 @@ def generate_leak_temp_vibration_fault(sample_id, mode="start", intensity="high"
        vibration[start:end] += np.linspace(0, vib_rise, fault_len)
        temperature[start:end] += np.linspace(0, temp_rise, fault_len)
     elif mode == "recover":
-        peak_idx = fault_len // 2
+
+        rise_ratio = 0.4
+        peak_idx = int(fault_len * rise_ratio)
         fall_len = fault_len - peak_idx
-        # rise to peak
-        pressure[start:start+peak_idx] -= np.linspace(0, leak_drop, peak_idx)
-        vibration[start:start+peak_idx] += np.linspace(0, vib_rise, peak_idx)
-        temperature[start:start+peak_idx] += np.linspace(0, temp_rise, peak_idx)
-        #  fall after peak
+
+        # Rise to peak with small noise
+        pressure[start:start+peak_idx] -= np.linspace(0, leak_drop, peak_idx) + np.random.normal(0, 0.1, peak_idx)
+        vibration[start:start+peak_idx] += np.linspace(0, vib_rise, peak_idx) + np.random.normal(0, 0.1, peak_idx)
+        temperature[start:start+peak_idx] += np.linspace(0, temp_rise, peak_idx) + np.random.normal(0, 0.1, peak_idx)
+
+         # Fall back to normal smoothly with noise
         pressure[start+peak_idx:end] = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
         vibration[start+peak_idx:end] = np.linspace(vibration[start+peak_idx-1], vibration[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
-        temperature[start+peak_idx:end] = np.linspace(temperature[start+peak_idx-1], temperature[start-1], fall_len ) + np.random.normal(0, 0.2, fall_len)
+        temperature[start+peak_idx:end] = np.linspace(temperature[start+peak_idx-1], temperature[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
         
     label[start:end] = "leak+temp+vibration"
 
