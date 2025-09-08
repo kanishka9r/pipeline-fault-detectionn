@@ -30,6 +30,7 @@ def normalize_and_save(data, out_path):
     df_normalized = pd.DataFrame(normalized, columns=['vibration', 'pressure', 'temperature'])
     df_normalized.to_csv(out_path, index=False)
     print(f"Saved normalized data to: {out_path}")
+    os.makedirs("data/scalers", exist_ok=True)
     joblib.dump(scaler, 'data/scalers/minmax_scaler.pkl')
     print("Saved MinMaxScaler to: data/scalers/minmax_scaler.pkl")
 
@@ -131,11 +132,17 @@ if __name__ == "__main__":
     # Set threshold
     flat_errors = errors.flatten()
     threshold = determine_threshold(flat_errors, method='percentile', value=97)
+    min_error = float(np.min(flat_errors))
+    max_error = float(np.max(flat_errors))  
+    mean_error = float(np.mean(flat_errors))
+    threshold = float(np.percentile(flat_errors, 97))
     print("Anomaly threshold set to:", threshold)
     print("Min error:", np.min(errors))
     print("Max error:", np.max(errors))
     print("Mean error:", np.mean(errors))
     print("97th percentile:", np.percentile(errors, 97))
+    np.save("data/scalers/autoencoder_error_stats.npy", np.array([min_error, max_error, mean_error, threshold]))
+    print(f"Saved Autoencoder error stats: min={min_error}, max={max_error}")
 
     # Evaluate false positives on normal validation set
     anomalies = flat_errors > threshold
