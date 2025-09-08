@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import joblib
-from sklearn.model_selection import train_test_split
+
 
 
 # Load and combine normal data
