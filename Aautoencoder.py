@@ -123,7 +123,7 @@ if __name__ == "__main__":
     train_autoencoder(model, train_data, epochs=50)
 
     # Save model
-    torch.save(model.state_dict(), "autoencoder.pt")
+    torch.save(model.state_dict(), "data/models/autoencoder.pt")
 
     # Compute reconstruction error on normal data
     errors = compute_reconstruction_error(model, val_data)
