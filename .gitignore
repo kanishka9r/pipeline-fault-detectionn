@@ -1,8 +1,5 @@
 # Ignore specific file
 extra.docx
 
-# Ignore model weights
-*.pt
-
 # Ignore temporary files
 data/
