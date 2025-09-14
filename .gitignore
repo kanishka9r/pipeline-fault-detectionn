@@ -1,5 +1,5 @@
 # Ignore specific file
-extra.doc
+extra.docx
 
 # Ignore model weights
 *.pt
