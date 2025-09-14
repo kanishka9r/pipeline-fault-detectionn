@@ -14,7 +14,7 @@ import random
 from scipy.stats import skew, kurtosis
 
 # Constants
-data_dir= "data/problem/normalized_data"  
+data_dir= "data/problems/extracted_faults"  
 batch_size = 32
 lr = 1e-4
 num_epouch = 50
@@ -31,16 +31,6 @@ torch.manual_seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
-def get_statistical_features(segment):
-    features = []
-    for i in range(segment.shape[1]):
-        sensor_data = segment[:, i]
-        mean_val = np.mean(sensor_data)
-        std_val = np.std(sensor_data)
-        
-        features.extend([mean_val, std_val])
-    
-    return np.array(features).reshape(1, -1)
 
 # Function to get label from filename
 def get_label_from_filename(filename):
@@ -51,59 +41,44 @@ def get_label_from_filename(filename):
 
 # Function to build dataset from folder structure
 def build_dataset_from_folder(data_dir):
-    filenames = []
-    for f in os.listdir(data_dir):
-        if f.endswith('.csv'):
-            filenames.append(f)
+    data_dir = Path(data_dir)
+    filenames = list(data_dir.rglob("*.csv"))
+    if len(filenames) == 0:
+        raise ValueError(f"No CSV files found in {data_dir}")    
     segments = []
     raw_labels = []
     intensities = []
 
-    for fname in filenames:
-        path = os.path.join(data_dir, fname)
+    for path in filenames:
         df = pd.read_csv(path)
-
-        #  first 3 columns are features (vibration, temperature, pressure)
-        feat = df.iloc[:, :3].values.astype(np.float32)  # shape (600,3)
-        if feat.shape != (600, 3):
-            # skip malformed segments
+        feat = df.iloc[:, :3].values.astype(np.float32)
+        if feat.shape != (60, 3):
             continue
-        statistical_features = get_statistical_features(feat)
-        stat_features_repeated = np.repeat(statistical_features, 600, axis=0) # Repeat the feature arrays 60 times to match the number of rows in 'feat'
-
-
-        # Concatenate the raw segment with the repeated feature arrays
-        combined_data = np.concatenate( (feat, stat_features_repeated), axis=1)
-        segments.append(combined_data)  # shape (60, 3*2) = (60, 6)
-  
-        # Get structured label
-        raw_labels.append(get_label_from_filename(fname))
-        # Calculate intensity as mean of 'Intensity' column
-        if 'Intensity' in df.columns:
-            inten = df['Intensity'].mean()
-        else:
-            inten = 0.0
+        segments.append(feat)
+        raw_labels.append(get_label_from_filename(path))
+        inten = df['Intensity'].mean() if 'Intensity' in df.columns else 0.0
         intensities.append(inten)
 
-    # label encode classes
-    label_encoder = LabelEncoder()
-    encoded = label_encoder.fit_transform(raw_labels)
+    if len(segments) == 0:
+        raise ValueError(f"No valid segments found in {data_dir}. Check CSV shapes (60,3).")
 
-    X = np.stack(segments)  # (N, 60, 3)
-    y_class = np.array(encoded, dtype=np.int64)   # (N,)
-    y_inten = np.array(intensities, dtype=np.float32)  # (N,)
+    # Stack as before
+    X = np.stack(segments)
+    y_class = np.array(LabelEncoder().fit_transform(raw_labels), dtype=np.int64)
+    y_inten = np.array(intensities, dtype=np.float32)
 
     # Convert to tensors
     X_t = torch.tensor(X, dtype=torch.float32)
     y_class_t = torch.tensor(y_class, dtype=torch.long)
-    y_inten_t = torch.tensor(y_inten, dtype=torch.float32).unsqueeze(1)  # (N,1)
+    y_inten_t = torch.tensor(y_inten, dtype=torch.float32).unsqueeze(1)
 
-    dataset = TensorDataset(X_t, y_class_t, y_inten_t)
-    return dataset, label_encoder
+    return TensorDataset(X_t, y_class_t, y_inten_t), LabelEncoder().fit(raw_labels)
 
+
+  
 # Define the CNN-LSTM model with multi-task learning
 class CNN_LSTM_MTL(nn.Module):
-    def __init__(self, input_size=105, cnn_channels=64, lstm_hidden=128, num_classes=19):
+    def __init__(self, input_size=3, cnn_channels=64, lstm_hidden=128, num_classes=9):
         super().__init__()
 
         # CNN layers
@@ -150,21 +125,21 @@ class CNN_LSTM_MTL(nn.Module):
         return logits , inten
 
 # Dataset loading and splitting
-dataset, label_encoder = build_dataset_from_folder(DATA_DIR)
+dataset, label_encoder = build_dataset_from_folder(data_dir)
 N = len(dataset)
 train_idx, val_idx = train_test_split(list(range(N)), test_size=0.2, random_state=42, stratify=[dataset[i][1].item() for i in range(N)])
 train_set = Subset(dataset, train_idx)
 val_set = Subset(dataset, val_idx)
-train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
-val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False)
+train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, drop_last=False)
+val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 num_classes = len(label_encoder.classes_)
 print("Num samples:", N, "Num classes:", num_classes)
 
 #Model preparation
-model = CNN_LSTM_MTL(input_size=105, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(DEVICE)
+model = CNN_LSTM_MTL(input_size=3, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(device)
 cls_loss_fn = nn.CrossEntropyLoss()
 reg_loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=4, factor=0.5)
 
 # Training loop with early stopping on val combined loss
@@ -173,7 +148,7 @@ patience_cnt = 0
 train_acc_history = []
 val_acc_history = []
 
-for epoch in range(1, NUM_EPOCHS + 1):
+for epoch in range(1, num_epouch + 1):
     #train model
     model.train()
     train_loss_sum = 0.0
@@ -182,9 +157,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
     total = 0
     
     for X, y_cls, y_inten in train_loader:
-        X = X.to(DEVICE)
-        y_cls = y_cls.to(DEVICE)
-        y_inten = y_inten.to(DEVICE).squeeze(1)
+        X = X.to(device)
+        y_cls = y_cls.to(device)
+        y_inten = y_inten.to(device).squeeze(1)
 
         optimizer.zero_grad() #setting zero gradient
         logits, inten_pred = model(X) #output from model
@@ -192,7 +167,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         # Compute losses
         loss_cls = cls_loss_fn(logits, y_cls)
         loss_reg = reg_loss_fn(inten_pred, y_inten)
-        loss = loss_cls + ALPHA * loss_reg
+        loss = loss_cls + alpha * loss_reg
         loss.backward() #loss backpropagation
         optimizer.step() #update model parameters
 
@@ -222,16 +197,16 @@ for epoch in range(1, NUM_EPOCHS + 1):
     with torch.no_grad(): # no gradient calculation during validation
 
         for X, y_cls, y_inten in val_loader:
-            X = X.to(DEVICE)
-            y_cls = y_cls.to(DEVICE)
-            y_inten = y_inten.to(DEVICE).squeeze(1)
+            X = X.to(device)
+            y_cls = y_cls.to(device)
+            y_inten = y_inten.to(device).squeeze(1)
 
             logits, inten_pred = model(X) 
 
             # Compute losses
             loss_cls = cls_loss_fn(logits, y_cls)
             loss_reg = reg_loss_fn(inten_pred, y_inten)
-            loss = loss_cls + ALPHA * loss_reg
+            loss = loss_cls + alpha * loss_reg
 
             # Accumulate validation losses
             val_loss_sum += loss.item() * X.size(0)
@@ -254,7 +229,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
 
     # Print epoch results
-    print(f"Epoch {epoch}/{NUM_EPOCHS} | Train loss {train_loss_avg:.4f} (cls {train_cls_avg:.4f} reg {train_reg_avg:.4f}) "
+    print(f"Epoch {epoch}/{num_epouch} | Train loss {train_loss_avg:.4f} (cls {train_cls_avg:.4f} reg {train_reg_avg:.4f}) "
           f"| Train acc {train_acc:.4f} | Val loss {val_loss_avg:.4f} (cls {val_cls_avg:.4f} reg {val_reg_avg:.4f}) Val acc {val_acc:.4f}")
 
     # early stopping & save best
@@ -268,12 +243,12 @@ for epoch in range(1, NUM_EPOCHS + 1):
         print("  Saved best model.")
     else:
         patience_cnt += 1
-        if patience_cnt >= PATIENCE:
+        if patience_cnt >= patience:
             print("Early stopping triggered.")
             break
 
 # Final evaluation (load best and print classification report + regression MAE)
-saved_model = torch.load('best_cnn_lstm_mtl.pt', map_location=DEVICE , weights_only= False)
+saved_model = torch.load('best_cnn_lstm_mtl.pt', map_location=device , weights_only= False)
 model.load_state_dict(saved_model['model_state_dict'])
 class_names = list(saved_model['label_classes'])
 
@@ -282,7 +257,7 @@ model.eval()
 all_pred, all_true, all_pred_inten, all_true_inten = [], [], [], []
 with torch.no_grad():
     for X, y_cls, y_inten in val_loader:
-        X = X.to(DEVICE)
+        X = X.to(device)
         logits, inten_pred = model(X)
         preds = logits.argmax(dim=1).cpu().numpy().tolist()
         all_pred.extend(preds)

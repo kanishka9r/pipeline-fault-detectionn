@@ -63,7 +63,6 @@ def detect_anomalies_in_all_fault_types(model, threshold, base_dir , seq_len=600
 def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_length=60):
     os.makedirs(save_dir, exist_ok=True)
     count = 0
-    min_error_possible, max_error_possible, _, _ = np.load("data/scalers/autoencoder_error_stats.npy")
     for root, _, files in os.walk(base_dir):
         for file in files:
             if file.endswith(".csv"):
@@ -85,6 +84,7 @@ def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_leng
                 if not np.any(anomaly_mask):
                     print(f"[{file_path}]  Normal (no anomaly segment)")
                     continue
+
                 labeled, num_segments = label(anomaly_mask)
 
                 for seg_id in range(1, num_segments + 1):
@@ -92,40 +92,29 @@ def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_leng
                     start_idx, end_idx = indices[0], indices[-1] + 1
     
                      # Extract fixed-length segment
-                    end_idx = min(start_idx + segment_length, data.shape[0])
-                    segment = data[start_idx:end_idx]
+                    cluster_length = end_idx - start_idx
+                    num_subsegments = int(np.ceil(cluster_length / segment_length))
 
-                    # Pad segment if shorter than required length
-                    if segment.shape[0] < segment_length:
-                        pad_len = segment_length - segment.shape[0]
-                        segment = np.pad(segment, ((0, pad_len), (0, 0)), mode='edge')
+                    for sub_id in range(num_subsegments):
+                        sub_start = start_idx + sub_id * segment_length
+                        sub_end = min(sub_start + segment_length, end_idx)
+                        segment = data[sub_start:sub_end]
 
-
-                # Calculate intensity based on error
-                    segment_error = error[start_idx:end_idx]
-                    denom = max_error_possible - min_error_possible
-                    if denom == 0: 
-                        denom = 1e-8  # avoid division by zero
-                    intensity_per_step = (segment_error - min_error_possible) / (max_error_possible - min_error_possible)
-                    intensity_per_step = np.clip(intensity_per_step, 0.0, 1.0)
-
-                # Pad intensity vector if segment was padded
-                    if len(intensity_per_step) < segment_length:
-                        pad_len = segment_length - len(intensity_per_step)
-                        intensity_per_step = np.pad(intensity_per_step, (0, pad_len), mode='edge')
+                         # Pad segment if shorter than required length
+                        if segment.shape[0] < segment_length:
+                           pad_len = segment_length - segment.shape[0]
+                           segment = np.pad(segment, ((0, pad_len), (0, 0)), mode='edge')
+                   
                
-                # Save as CSV with proper header
-                    structured_label = get_structured_label(file_path)
-                    segment_df = pd.DataFrame(segment, columns=['Vibration', 'Temperature', 'Pressure'])
-                    segment_df['intensity'] = intensity_per_step
-                    base_name = Path(file_path).stem
+                    # Save as CSV with proper header
+                    segment_df = pd.DataFrame(segment, columns=['Vibration', 'Temp erature', 'Pressure'])                   
                     # Rebuild relative path under normalized_data
                     rel_path = Path(file_path).relative_to(base_dir).with_suffix("")  # remove .csv
                     save_subdir = os.path.join(save_dir, rel_path.parent)            # keep folder hierarchy
                     os.makedirs(save_subdir, exist_ok=True)
 
                    # Save with structured name inside the subfolder
-                    save_name = f"{base_name}.csv"  # add segment number
+                    save_name = f"{get_structured_label(file_path)}_seg{seg_id+1}.csv"  # add segment number
                     save_path = os.path.join(save_subdir, save_name)
                     segment_df.to_csv(save_path, index=False)
                     count += 1
