@@ -10,9 +10,9 @@ from scipy.ndimage import label
 def get_structured_label(file_path):
     p = Path(file_path).resolve()
     parts = p.parts
-    if "problems" not in parts:
-        raise ValueError("Path does not contain 'processed' directory")
-    idx = parts.index("problems")
+    if "normalized_data" not in parts:
+        raise ValueError("Path does not contain 'normalized_data' directory")
+    idx = parts.index("normalized_data")
     category = parts[idx + 1]
     if category == "faults":
         fault_type = parts[idx + 2]
@@ -21,7 +21,7 @@ def get_structured_label(file_path):
         sensor = parts[idx + 2]
         subtype = parts[idx + 3]
         return f"sensor_{sensor}_{subtype}"
-    elif category == "combined_faults":
+    elif category == "combined":
         combo = parts[idx + 2]
         return f"combined_{combo}"
     else:
@@ -63,7 +63,7 @@ def detect_anomalies_in_all_fault_types(model, threshold, base_dir , seq_len=600
 def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_length=60):
     os.makedirs(save_dir, exist_ok=True)
     count = 0
-    min_error_possible, max_error_possible, _, _ = np.load("autoencoder_error_stats.npy")
+    min_error_possible, max_error_possible, _, _ = np.load("data/scalers/autoencoder_error_stats.npy")
     for root, _, files in os.walk(base_dir):
         for file in files:
             if file.endswith(".csv"):
@@ -119,12 +119,17 @@ def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_leng
                     segment_df = pd.DataFrame(segment, columns=['Vibration', 'Temperature', 'Pressure'])
                     segment_df['intensity'] = intensity_per_step
                     base_name = Path(file_path).stem
-                    save_name = f"{structured_label}_{base_name}_seg{seg_id}_{count}.csv"
-                    save_path = os.path.join(save_dir, save_name)
-                    segment_df.to_csv(save_path, index=False)
+                    # Rebuild relative path under normalized_data
+                    rel_path = Path(file_path).relative_to(base_dir).with_suffix("")  # remove .csv
+                    save_subdir = os.path.join(save_dir, rel_path.parent)            # keep folder hierarchy
+                    os.makedirs(save_subdir, exist_ok=True)
 
-                    print(f"[{file_path}] Segment saved as {os.path.basename(save_path)}")
+                   # Save with structured name inside the subfolder
+                    save_name = f"{base_name}.csv"  # add segment number
+                    save_path = os.path.join(save_subdir, save_name)
+                    segment_df.to_csv(save_path, index=False)
                     count += 1
+
     print(f"\n Total anomaly segments saved as CSV: {count}")
 
 
@@ -132,12 +137,12 @@ def extract_anomaly_segments(model, threshold, base_dir, save_dir , segment_leng
 if __name__ == "__main__":
     # Load trained model
     model = LSTMAutoencoder(input_size=3, hidden_size=64, latent_size=32)
-    model.load_state_dict(torch.load("autoencoder.pt"))
+    model.load_state_dict(torch.load("data/models/autoencoder.pt"))
     model.eval()
 
     # Run extractor
-    min_error, max_error, mean_error, threshold = np.load("autoencoder_error_stats.npy", allow_pickle=True)
-    extract_anomaly_segments(model=model,threshold=threshold , base_dir="data/processed/problems",save_dir="data/processed/anomaly_segments",segment_length=60)
+    min_error, max_error, mean_error, threshold = np.load("data/scalers/autoencoder_error_stats.npy", allow_pickle=True)
+    extract_anomaly_segments(model=model,threshold=threshold , base_dir="data/problems/normalized_data",save_dir="data/problems/extracted_faults",segment_length=60)
 
     # Detect anomalies in all fault types
-    #detect_anomalies_in_all_fault_types(model, threshold = 0.014 , base_dir='data/processed/anomilies')   
+    #detect_anomalies_in_all_fault_types(model, threshold = 0.014 , base_dir='data/problems/normalized_data')   

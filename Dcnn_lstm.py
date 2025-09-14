@@ -14,21 +14,22 @@ import random
 from scipy.stats import skew, kurtosis
 
 # Constants
-DATA_DIR = "data/processed/anomaly_segments"  
-BATCH_SIZE = 32
-LR = 1e-4
-NUM_EPOCHS = 50
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-ALPHA = 0.5  # regression loss weight
-PATIENCE = 8  # early stopping patience on val loss
-SEED = 42
+data_dir= "data/problem/normalized_data"  
+batch_size = 32
+lr = 1e-4
+num_epouch = 50
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
+alpha = 0.5  # regression loss weight
+patience = 8  # early stopping patience on val loss
+seed = 42
 
 # Set random seeds for reproducibility
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
 if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
+    torch.cuda.manual_seed_all(seed)
 
 def get_statistical_features(segment):
     features = []
@@ -36,28 +37,16 @@ def get_statistical_features(segment):
         sensor_data = segment[:, i]
         mean_val = np.mean(sensor_data)
         std_val = np.std(sensor_data)
-        var_val = np.var(sensor_data)
-        rms_val = np.sqrt(np.mean(sensor_data**2))
         
-        features.extend([mean_val, std_val, var_val, rms_val])
+        features.extend([mean_val, std_val])
     
     return np.array(features).reshape(1, -1)
-
-def get_fft_features(segment):
-    fft_features = []
-    for i in range(segment.shape[1]):
-        sensor_data = segment[:, i]
-        fft_result = np.fft.fft(sensor_data)
-        fft_amplitude = np.abs(fft_result) / len(sensor_data)
-        fft_features.extend(fft_amplitude[:len(sensor_data)//2])
-    
-    return np.array(fft_features).reshape(1, -1)
 
 # Function to get label from filename
 def get_label_from_filename(filename):
     from pathlib import Path
     name = Path(filename).stem
-    parts = name.split('_')[:-1]  # drop trailing number if your naming has it
+    parts = name.split('_')[:-3]  # drop trailing number if your naming has it
     return '_'.join(parts)
 
 # Function to build dataset from folder structure
@@ -75,21 +64,17 @@ def build_dataset_from_folder(data_dir):
         df = pd.read_csv(path)
 
         #  first 3 columns are features (vibration, temperature, pressure)
-        feat = df.iloc[:, :3].values.astype(np.float32)  # shape (60,3)
-        if feat.shape != (60, 3):
+        feat = df.iloc[:, :3].values.astype(np.float32)  # shape (600,3)
+        if feat.shape != (600, 3):
             # skip malformed segments
             continue
         statistical_features = get_statistical_features(feat)
-        fft_features = get_fft_features(feat)
-        # Repeat the feature arrays 60 times to match the number of rows in 'feat'
-        stat_features_repeated = np.repeat(statistical_features, 60, axis=0)
-        fft_features_repeated = np.repeat(fft_features, 60, axis=0)
+        stat_features_repeated = np.repeat(statistical_features, 600, axis=0) # Repeat the feature arrays 60 times to match the number of rows in 'feat'
+
 
         # Concatenate the raw segment with the repeated feature arrays
-        combined_data = np.concatenate(
-            (feat, stat_features_repeated, fft_features_repeated), axis=1
-        )
-        segments.append(combined_data)  # shape (60, 3*4 + 3*30) = (60, 105)
+        combined_data = np.concatenate( (feat, stat_features_repeated), axis=1)
+        segments.append(combined_data)  # shape (60, 3*2) = (60, 6)
   
         # Get structured label
         raw_labels.append(get_label_from_filename(fname))

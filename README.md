@@ -14,9 +14,9 @@ This project implements a multi-stage machine learning system for detecting, cla
 The system is trained and evaluated on a synthetically generated dataset to simulate a wide range of pipeline conditions, including:
 
 - **Normal Data:** Stable and fluctuating operational data to establish a baseline.  
-- **Process Faults:** Simulated events like leaks (pressure drop, vibration rise) and blockages (pressure spike), created with varying intensity (low, high) and speed (slow, fast).  
-- **Sensor Faults:** Simulated sensor malfunctions, including flat-line and high-noise faults.  
-- **Combined Faults:** Complex scenarios where multiple process and sensor faults occur simultaneously.  
+- **Process Faults:** Simulated events like leaks (pressure drop, vibration rise) and blockages (pressure spike), created with varying intensity (low, high) .  
+- **Sensor Faults:** Simulated sensor malfunctions, including low/high-noise faults.  
+- **Combined Faults:** Complex scenarios where multiple faults occur simultaneously.  
 
 ## Model Architecture
 
