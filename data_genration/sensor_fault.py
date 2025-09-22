@@ -71,7 +71,7 @@ def generate_pressure_noise(sample_id, mode="start" , intensity="high"):
         noise_loc = np.random.uniform(58,62)
         noise_scale = np.random.uniform(4,6)
     else:
-        noise_loc = np.random.uniform(68,72)
+        noise_loc = np.random.uniform(90,120)
         noise_scale = np.random.uniform(13,17)
 
     # Inject noise
@@ -138,7 +138,7 @@ def generate_temperature_noise(sample_id, mode="start" , intensity="high"):
         noise_loc = np.random.uniform(50,55)
         noise_scale = np.random.uniform(4,6)
     else:
-        noise_loc = np.random.uniform(63,67)
+        noise_loc = np.random.uniform(80,100)
         noise_scale = np.random.uniform(13,17)
 
     # Inject noise 

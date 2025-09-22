@@ -123,11 +123,12 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
 
    # Intensity levels
     if intensity == "low":
-        spike_val = np.random.uniform(5, 12)
-        noise_scale = np.random.uniform(3, 7)
+        spike_val = np.random.uniform(8, 15)
+        noise_scale = np.random.uniform(1, 3)
     else:  # high
-        spike_val = np.random.uniform(15, 25)
-        noise_scale = np.random.uniform(10, 14)
+        spike_val = np.random.uniform(20, 30)
+        noise_scale = np.random.uniform(3, 16)
+
 
     # Apply the fault
     if mode == "start":
