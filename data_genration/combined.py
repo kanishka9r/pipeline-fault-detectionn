@@ -63,9 +63,9 @@ def generate_combined_leak_blockage(sample_id, intensity = "high", mode="start")
 
     # Intensity levels
     if intensity == "low":
-        leak_drop = np.random.uniform(5, 12)
-        vib_rise = np.random.uniform(1, 2)
-        blockage_spike = np.random.uniform(5, 12)
+        leak_drop = np.random.uniform(2 , 4)
+        vib_rise = np.random.uniform(0.5, 1)
+        blockage_spike = np.random.uniform(2, 4)
     else: 
         leak_drop = np.random.uniform(15, 25)
         vib_rise = np.random.uniform(2, 5)
@@ -123,11 +123,11 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
 
    # Intensity levels
     if intensity == "low":
-        spike_val = np.random.uniform(12, 20)
-        noise_scale = np.random.uniform(2, 5)
+        spike_val = np.random.uniform(13, 17)
+        noise_scale = np.random.uniform(3, 4)
     else:  # high
-        spike_val = np.random.uniform(20, 30)
-        noise_scale = np.random.uniform(3, 16)
+        spike_val = np.random.uniform(40 ,  50)
+        noise_scale = np.random.uniform(20, 25)
 
 
     # Apply the fault
@@ -179,13 +179,13 @@ def generate_leak_temp_vibration_fault(sample_id, mode="start", intensity="high"
 
      # Intensity levels
     if intensity == "low":
-        leak_drop = np.random.uniform(5, 12)
-        vib_rise = np.random.uniform(0.5, 1.5)
-        temp_rise = np.random.uniform(5, 10)
+        leak_drop = np.random.uniform(3, 7)
+        vib_rise = np.random.uniform(0.5, 0.8)
+        temp_rise = np.random.uniform(3, 7)
     else:  
-        leak_drop = np.random.uniform(15, 25)
+        leak_drop = np.random.uniform(15, 20)
         vib_rise = np.random.uniform(2, 4)
-        temp_rise = np.random.uniform(15, 25)
+        temp_rise = np.random.uniform(15, 20)
 
     # Apply the faults
     if mode == "start":

@@ -63,8 +63,8 @@ def generate_leak_fault(sample_id, mode="start", intensity="high"):
 
     # Generate pressure_drop and vibration_rise based on intensity 
     if intensity == "low":
-        max_pressure_drop = 5.0
-        max_vibration_rise = 0.8
+        max_pressure_drop = 4.0
+        max_vibration_rise = 0.6
     else:  # high
         max_pressure_drop = 15.0
         max_vibration_rise = 3.0
@@ -116,11 +116,11 @@ def generate_blockage_fault(sample_id, mode="start", intensity="high"):
 
     # Intensity-based spikes
     if intensity == "low":
-        max_pressure_spike = 8.0
-        max_vibration_spike = 1.5
+        max_pressure_spike = 6.0
+        max_vibration_spike = 1.0
     else:  # high
-        max_pressure_spike = 20.0
-        max_vibration_spike = 5.0
+        max_pressure_spike = 18.0
+        max_vibration_spike = 4.0
 
     # Jitter
     pressure_jitter = np.random.normal(0, 0.5, fault_len)
@@ -167,11 +167,12 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
 
     # Intensity-based effect
     if intensity == "low":
-        max_temp_rise = 10.0
-        max_pressure_drop = 2.0
+        max_temp_rise = 6.0
+        max_pressure_drop = 0.6
     else:  # high
         max_temp_rise = 30.0
-        max_pressure_drop = 5.0    
+        max_pressure_drop = 5.0 
+
 
     # Jitter
     temp_jitter = np.random.normal(0, 0.5, fault_len)

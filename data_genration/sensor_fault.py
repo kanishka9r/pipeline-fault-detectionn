@@ -68,11 +68,11 @@ def generate_pressure_noise(sample_id, mode="start" , intensity="high"):
 
     # Intensity of noise
     if intensity == "low":
-        noise_loc = np.random.uniform(58,62)
-        noise_scale = np.random.uniform(4,6)
+        noise_loc = np.random.uniform(62,67)
+        noise_scale = np.random.uniform(6 , 8)
     else:
         noise_loc = np.random.uniform(90,120)
-        noise_scale = np.random.uniform(13,17)
+        noise_scale = np.random.uniform(15,20)
 
     # Inject noise
     if mode == "start":
@@ -138,8 +138,8 @@ def generate_temperature_noise(sample_id, mode="start" , intensity="high"):
         noise_loc = np.random.uniform(50,55)
         noise_scale = np.random.uniform(4,6)
     else:
-        noise_loc = np.random.uniform(80,100)
-        noise_scale = np.random.uniform(13,17)
+        noise_loc = np.random.uniform(70,90)
+        noise_scale = np.random.uniform(11,15)
 
     # Inject noise 
     if mode == "start":
@@ -201,8 +201,8 @@ def generate_vibration_noise(sample_id, mode="start" , intensity="high"):
 
     # Intensity of noise
     if intensity == "low":
-        noise_loc = np.random.uniform(1,3)
-        noise_scale = 1
+        noise_loc = np.random.uniform(1,2)
+        noise_scale = 0.5
     else:
         noise_loc = np.random.uniform(3,7)
         noise_scale = np.random.uniform(1,3)
