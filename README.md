@@ -1,6 +1,6 @@
 # Real Time Fault Detection And Classification In Gas/Oil Pipeline 
 
-This project implements a multi-stage machine learning system for detecting, classifying, and estimating the intensity of faults in a simulated industrial pipeline. The system operates on time-series sensor data from vibration, pressure, and temperature sensors.
+This project implements a multi-stage machine learning system for detecting, classifying, and estimating the intensity of faults in a simulated industrial pipeline. The system operates on time-series sensor data from vibration, pressure, and temperature sensors.( THIS IS A ON-GOING PROJECT)
 
 ## Features
 
