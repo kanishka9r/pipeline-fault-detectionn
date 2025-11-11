@@ -17,10 +17,9 @@ from scipy.stats import skew, kurtosis
 data_dir= "data/problems/extracted_faults"  
 batch_size = 32
 lr = 1e-4
-num_epouch = 50
+num_epoch = 50
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
-alpha = 0.5  # regression loss weight
 patience = 8  # early stopping patience on val loss
 seed = 42
 
@@ -36,7 +35,7 @@ if torch.cuda.is_available():
 def get_label_from_filename(filename):
     from pathlib import Path
     name = Path(filename).stem
-    parts = name.split('_')[:-3]  # drop trailing number if your naming has it
+    parts = name.split('_')[:-2]  # drop trailing number if your naming has it
     return '_'.join(parts)
 
 # Function to build dataset from folder structure
@@ -56,8 +55,6 @@ def build_dataset_from_folder(data_dir):
             continue
         segments.append(feat)
         raw_labels.append(get_label_from_filename(path))
-        inten = df['Intensity'].mean() if 'Intensity' in df.columns else 0.0
-        intensities.append(inten)
 
     if len(segments) == 0:
         raise ValueError(f"No valid segments found in {data_dir}. Check CSV shapes (60,3).")
@@ -65,14 +62,12 @@ def build_dataset_from_folder(data_dir):
     # Stack as before
     X = np.stack(segments)
     y_class = np.array(LabelEncoder().fit_transform(raw_labels), dtype=np.int64)
-    y_inten = np.array(intensities, dtype=np.float32)
 
     # Convert to tensors
     X_t = torch.tensor(X, dtype=torch.float32)
     y_class_t = torch.tensor(y_class, dtype=torch.long)
-    y_inten_t = torch.tensor(y_inten, dtype=torch.float32).unsqueeze(1)
 
-    return TensorDataset(X_t, y_class_t, y_inten_t), LabelEncoder().fit(raw_labels)
+    return TensorDataset(X_t, y_class_t,), LabelEncoder().fit(raw_labels)
 
 
   
@@ -121,8 +116,7 @@ class CNN_LSTM_MTL(nn.Module):
         lstm_out, _ = self.lstm(x)   # (B, T//2, hidden)
         last = lstm_out[:, -1, :]     # Take last output of LSTM
         logits = self.classifier(last)
-        inten = self.regressor(last).squeeze(1)  # (B,)
-        return logits , inten
+        return logits 
 
 # Dataset loading and splitting
 dataset, label_encoder = build_dataset_from_folder(data_dir)
@@ -138,7 +132,6 @@ print("Num samples:", N, "Num classes:", num_classes)
 #Model preparation
 model = CNN_LSTM_MTL(input_size=3, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(device)
 cls_loss_fn = nn.CrossEntropyLoss()
-reg_loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=4, factor=0.5)
 
@@ -152,29 +145,24 @@ for epoch in range(1, num_epouch + 1):
     #train model
     model.train()
     train_loss_sum = 0.0
-    train_cls_loss, train_reg_loss = 0.0, 0.0
     correct = 0
     total = 0
     
-    for X, y_cls, y_inten in train_loader:
+    for X, y_cls, in train_loader:
         X = X.to(device)
         y_cls = y_cls.to(device)
-        y_inten = y_inten.to(device).squeeze(1)
 
         optimizer.zero_grad() #setting zero gradient
-        logits, inten_pred = model(X) #output from model
+        logits = model(X) #output from model
 
         # Compute losses
         loss_cls = cls_loss_fn(logits, y_cls)
-        loss_reg = reg_loss_fn(inten_pred, y_inten)
-        loss = loss_cls + alpha * loss_reg
-        loss.backward() #loss backpropagation
+        loss_cls.backward() #loss backpropagation
         optimizer.step() #update model parameters
 
         # Accumulate losses 
-        train_loss_sum += loss.item() * X.size(0)
-        train_cls_loss += loss_cls.item() * X.size(0)
-        train_reg_loss += loss_reg.item() * X.size(0)
+        train_loss_sum += loss_cls.item() * X.size(0)
+
 
         preds = logits.argmax(dim=1)
         correct += (preds == y_cls).sum().item()
@@ -183,35 +171,28 @@ for epoch in range(1, num_epouch + 1):
     # printable parameters
     train_loss_avg = train_loss_sum / len(train_set)
     train_acc = correct / total
-    train_cls_avg = train_cls_loss / len(train_set)
-    train_reg_avg = train_reg_loss / len(train_set)
     train_acc_history.append(train_acc)
     
     # validate
     model.eval()
     val_loss_sum = 0.0
-    val_cls_sum, val_reg_sum = 0.0, 0.0
     val_correct = 0
     val_total = 0
 
     with torch.no_grad(): # no gradient calculation during validation
 
-        for X, y_cls, y_inten in val_loader:
+        for X, y_cls in val_loader:
             X = X.to(device)
             y_cls = y_cls.to(device)
-            y_inten = y_inten.to(device).squeeze(1)
 
-            logits, inten_pred = model(X) 
+            logits = model(X) 
 
             # Compute losses
             loss_cls = cls_loss_fn(logits, y_cls)
-            loss_reg = reg_loss_fn(inten_pred, y_inten)
-            loss = loss_cls + alpha * loss_reg
 
             # Accumulate validation losses
-            val_loss_sum += loss.item() * X.size(0)
-            val_cls_sum += loss_cls.item() * X.size(0)
-            val_reg_sum += loss_reg.item() * X.size(0)
+            val_loss_sum += loss_cls.item() * X.size(0)
+    
 
             preds = logits.argmax(dim=1)
             val_correct += (preds == y_cls).sum().item()
@@ -220,8 +201,7 @@ for epoch in range(1, num_epouch + 1):
     # printable parameters
     val_loss_avg = val_loss_sum / len(val_set)
     val_acc = val_correct / val_total
-    val_cls_avg = val_cls_sum / len(val_set)
-    val_reg_avg = val_reg_sum / len(val_set)
+    val_cls_avg = val_loss_sum / len(val_set)
     val_acc_history.append(val_acc)
 
     #setup learning rate scheduler
@@ -229,8 +209,8 @@ for epoch in range(1, num_epouch + 1):
 
 
     # Print epoch results
-    print(f"Epoch {epoch}/{num_epouch} | Train loss {train_loss_avg:.4f} (cls {train_cls_avg:.4f} reg {train_reg_avg:.4f}) "
-          f"| Train acc {train_acc:.4f} | Val loss {val_loss_avg:.4f} (cls {val_cls_avg:.4f} reg {val_reg_avg:.4f}) Val acc {val_acc:.4f}")
+    print(f"Epoch {epoch}/{num_epouch} | Train loss {train_loss_avg:.4f}  "
+          f"| Train acc {train_acc:.4f} | Val loss {val_loss_avg:.4f} | Val acc {val_acc:.4f}")
 
     # early stopping & save best
     if val_loss_avg < low_loss:
@@ -254,22 +234,19 @@ class_names = list(saved_model['label_classes'])
 
 # Evaluate on validation set
 model.eval()
-all_pred, all_true, all_pred_inten, all_true_inten = [], [], [], []
+all_pred, all_true = [], []
 with torch.no_grad():
-    for X, y_cls, y_inten in val_loader:
+    for X, y_cls in val_loader:
         X = X.to(device)
-        logits, inten_pred = model(X)
+        logits = model(X)
         preds = logits.argmax(dim=1).cpu().numpy().tolist()
         all_pred.extend(preds)
         all_true.extend(y_cls.cpu().numpy().tolist())
-        all_pred_inten.extend(inten_pred.cpu().numpy().tolist())
-        all_true_inten.extend(y_inten.squeeze(1).cpu().numpy().tolist())
 
 #print classification report and regression MAE
 print("\nClassification Report (validation):")
 print(classification_report(all_true, all_pred, target_names=class_names))
-mae = mean_absolute_error(all_true_inten, all_pred_inten)
-print(f"Regression MAE (intensity) on validation: {mae:.4f}")
+
 
 
 # Compute confusion matrix
