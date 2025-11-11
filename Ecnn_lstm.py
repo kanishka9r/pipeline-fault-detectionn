@@ -6,12 +6,14 @@ import pandas as pd
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from collections import Counter
 from torch.utils.data import  DataLoader , TensorDataset , Subset
-from sklearn.metrics import classification_report, mean_absolute_error , confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
-from scipy.stats import skew, kurtosis
+
 
 # Constants
 data_dir= "data/problems/extracted_faults"  
@@ -33,10 +35,12 @@ if torch.cuda.is_available():
 
 # Function to get label from filename
 def get_label_from_filename(filename):
-    from pathlib import Path
-    name = Path(filename).stem
-    parts = name.split('_')[:-2]  # drop trailing number if your naming has it
-    return '_'.join(parts)
+    name = Path(filename).stem.lower()
+    # Remove trailing _segX_Y if present
+    if "_seg" in name:
+        name = name.split("_seg")[0]
+    return name  # e.g. "fault_leak_low"
+
 
 # Function to build dataset from folder structure
 def build_dataset_from_folder(data_dir):
@@ -46,7 +50,7 @@ def build_dataset_from_folder(data_dir):
         raise ValueError(f"No CSV files found in {data_dir}")    
     segments = []
     raw_labels = []
-    intensities = []
+
 
     for path in filenames:
         df = pd.read_csv(path)
@@ -57,23 +61,25 @@ def build_dataset_from_folder(data_dir):
         raw_labels.append(get_label_from_filename(path))
 
     if len(segments) == 0:
-        raise ValueError(f"No valid segments found in {data_dir}. Check CSV shapes (60,3).")
+        raise ValueError("No valid segments found ")
 
     # Stack as before
     X = np.stack(segments)
-    y_class = np.array(LabelEncoder().fit_transform(raw_labels), dtype=np.int64)
+    encoder = LabelEncoder()
+    y_class = np.array(encoder.fit_transform(raw_labels), dtype=np.int64)
+
 
     # Convert to tensors
     X_t = torch.tensor(X, dtype=torch.float32)
     y_class_t = torch.tensor(y_class, dtype=torch.long)
 
-    return TensorDataset(X_t, y_class_t,), LabelEncoder().fit(raw_labels)
+    return TensorDataset(X_t, y_class_t,), encoder
 
 
   
 # Define the CNN-LSTM model with multi-task learning
 class CNN_LSTM_MTL(nn.Module):
-    def __init__(self, input_size=3, cnn_channels=64, lstm_hidden=128, num_classes=9):
+    def __init__(self, input_size=3, cnn_channels=64, lstm_hidden=256, num_classes=18):
         super().__init__()
 
         # CNN layers
@@ -94,6 +100,9 @@ class CNN_LSTM_MTL(nn.Module):
         # LSTM layers
         self.lstm = nn.LSTM(input_size=cnn_channels*2, hidden_size=lstm_hidden,
         num_layers=2 , batch_first=True , bidirectional=True)
+        self.layer_norm = nn.LayerNorm(lstm_hidden * 2)
+        self.attn = nn.Linear(lstm_hidden * 2, 1)
+
          
         # Multi-task output layers
         self.classifier = nn.Sequential(
@@ -102,11 +111,6 @@ class CNN_LSTM_MTL(nn.Module):
             nn.Dropout(0.3),
             nn.Linear(128, num_classes)
         )
-        self.regressor = nn.Sequential(
-            nn.Linear(lstm_hidden*2, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1)
-        )
 
     def forward(self, x):
         # x: (B, seq_len=60, features=3)
@@ -114,9 +118,11 @@ class CNN_LSTM_MTL(nn.Module):
         x = self.cnn(x)         # (B, F_out, T//2)
         x = x.permute(0, 2, 1)  # (B, T//2, F_out)
         lstm_out, _ = self.lstm(x)   # (B, T//2, hidden)
-        last = lstm_out[:, -1, :]     # Take last output of LSTM
-        logits = self.classifier(last)
-        return logits 
+        attn_logits = self.attn(lstm_out)             # (B, T, 1)
+        attn_weights = torch.softmax(attn_logits, dim=1)  # (B, T, 1)
+        context = torch.sum(attn_weights * lstm_out, dim=1)  # (B, hidden*2)
+        context = self.layer_norm(context)
+        return self.classifier(context)
 
 # Dataset loading and splitting
 dataset, label_encoder = build_dataset_from_folder(data_dir)
@@ -128,10 +134,18 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, drop_l
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 num_classes = len(label_encoder.classes_)
 print("Num samples:", N, "Num classes:", num_classes)
+labels_list = [dataset[i][1].item() for i in range(len(dataset))]
+class_weights_np = compute_class_weight(
+    class_weight='balanced',
+    classes=np.arange(num_classes),
+    y=labels_list
+)
+class_weights = torch.tensor(class_weights_np, dtype=torch.float32).to(device)
+print("\nClass Weights (for balanced training):", class_weights_np)
 
 #Model preparation
-model = CNN_LSTM_MTL(input_size=3, cnn_channels=32, lstm_hidden=128, num_classes=num_classes).to(device)
-cls_loss_fn = nn.CrossEntropyLoss()
+model = CNN_LSTM_MTL(input_size=3, cnn_channels=64, lstm_hidden=256, num_classes=num_classes).to(device)
+cls_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=4, factor=0.5)
 
@@ -141,7 +155,7 @@ patience_cnt = 0
 train_acc_history = []
 val_acc_history = []
 
-for epoch in range(1, num_epouch + 1):
+for epoch in range(1, num_epoch + 1):
     #train model
     model.train()
     train_loss_sum = 0.0
@@ -150,6 +164,10 @@ for epoch in range(1, num_epouch + 1):
     
     for X, y_cls, in train_loader:
         X = X.to(device)
+        if model.training:
+            noise = torch.randn_like(X) * 0.01  # small Gaussian noise
+            scale = 1.0 + 0.02 * torch.randn(X.shape[0], 1, X.shape[2], device=device)  # small scale jitter
+            X = X * scale + noise
         y_cls = y_cls.to(device)
 
         optimizer.zero_grad() #setting zero gradient
@@ -209,18 +227,20 @@ for epoch in range(1, num_epouch + 1):
 
 
     # Print epoch results
-    print(f"Epoch {epoch}/{num_epouch} | Train loss {train_loss_avg:.4f}  "
+    print(f"Epoch {epoch}/{num_epoch} | Train loss {train_loss_avg:.4f}  "
           f"| Train acc {train_acc:.4f} | Val loss {val_loss_avg:.4f} | Val acc {val_acc:.4f}")
 
     # early stopping & save best
     if val_loss_avg < low_loss:
         low_loss = val_loss_avg
         patience_cnt = 0
+        os.makedirs("data/models", exist_ok=True)
         torch.save({
             'model_state_dict': model.state_dict(),
             'label_classes': label_encoder.classes_
-        }, 'best_cnn_lstm_mtl.pt')
-        print("  Saved best model.")
+        },  'data/models/best_cnn_lstm_mtl.pt')
+        print("  Saved best model to data/models/best_cnn_lstm_mtl.pt")
+
     else:
         patience_cnt += 1
         if patience_cnt >= patience:
@@ -228,7 +248,7 @@ for epoch in range(1, num_epouch + 1):
             break
 
 # Final evaluation (load best and print classification report + regression MAE)
-saved_model = torch.load('best_cnn_lstm_mtl.pt', map_location=device , weights_only= False)
+saved_model = torch.load('data/models/best_cnn_lstm_mtl.pt', map_location=device , weights_only = False)
 model.load_state_dict(saved_model['model_state_dict'])
 class_names = list(saved_model['label_classes'])
 
