@@ -1,12 +1,12 @@
-# Real Time Fault Detection And Classification In Gas/Oil Pipeline 
+# Industrial Pipeline Fault Detection Using LSTM  Autoencoder and CNN-LSTM Hybrid Model
 
-This project implements a multi-stage machine learning system for detecting, classifying, and estimating the intensity of faults in a simulated industrial pipeline. The system operates on time-series sensor data from vibration, pressure, and temperature sensors.
+
+This project implements a multi-stage machine learning system for detecting and classifying in a simulated industrial pipeline. The system operates on time-series sensor data from vibration, pressure, and temperature sensors.
 
 ## Features
 
 - **Anomalous Behavior Detection:** Utilizes an unsupervised learning approach to identify deviations from normal operating conditions.  
-- **Fault Classification:** Classifies detected anomalies into specific fault types, such as leaks, blockages, or sensor failures.  
-- **Fault Intensity Estimation:** Quantifies the severity of a fault using a regression model, providing a measure of its intensity.  
+- **Fault Classification:** Classifies detected anomalies into specific fault types, such as leaks, blockages, or sensor failures.    
 - **Comprehensive Fault Coverage:** Trained on a diverse synthetic dataset that includes single, combined, and sensor-specific faults.  
 
 ## Dataset Used
@@ -33,8 +33,7 @@ The project uses a two-stage machine learning pipeline:
 - **1D CNN:** Extracts local, spatial features from the time-series segments.  
 - **Bi-directional LSTM:** Processes these features to learn temporal dependencies.  
 - **Output Heads:**  
-  - **Classification Head:** Predicts the specific fault type.  
-  - **Regression Head:** Estimates the fault intensity.  
+  - **Classification Head:** Predicts the specific fault type and intensity(low or high)
 
 ## Tech Stack
 
@@ -68,7 +67,7 @@ Run the script to train the CNN-LSTM model on the extracted anomaly segments.
 
 - **Real-Time Monitoring:** Implement a system to process incoming data streams in real time.  
 - **Hyperparameter Tuning:** Use automated tools to optimize model hyperparameters for better performance.  
-- **Explainable AI (XAI):** Add methods to interpret model predictions, showing which sensor features are most indicative of a fault.  
+- **Intensity Calculation.** Can use to check intensity of the fault on scale of (0-1).
 - **Real-World Data Validation:** Test the model on real-world pipeline data to validate its robustness.  
   
 ## License
