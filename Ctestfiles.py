@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 from scipy.stats import ks_2samp
 from sklearn.metrics import roc_curve, auc
 import csv
-import numpy as np
-import torch
 import random
 
 np.random.seed(42)

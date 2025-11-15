@@ -219,7 +219,6 @@ for epoch in range(1, num_epoch + 1):
     # printable parameters
     val_loss_avg = val_loss_sum / len(val_set)
     val_acc = val_correct / val_total
-    val_cls_avg = val_loss_sum / len(val_set)
     val_acc_history.append(val_acc)
 
     #setup learning rate scheduler

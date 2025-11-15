@@ -145,7 +145,7 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
         pressure[start:start+peak_idx] += np.random.normal(0, noise_scale, peak_idx)  # added noise
 
         # Fall back to normal smoothly
-        fall_trend = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len)
+        fall_trend = np.linspace(pressure[start+peak_idx-1], pressure[start], fall_len)
         pressure[start+peak_idx:end] = fall_trend + np.random.normal(0, noise_scale, fall_len)
 
     label[start:end] = "blockage+pressure noise"
@@ -166,7 +166,7 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
     })
 
     #save data
-    save_with_metadata(df , "blockage+pressure" , mode , intensity , sample_id)
+    save_with_metadata(df , "blockage+pressure noise" , mode , intensity , sample_id)
 
 
 # Function to generate leak, temperature, and vibration fault
@@ -205,9 +205,9 @@ def generate_leak_temp_vibration_fault(sample_id, mode="start", intensity="high"
         temperature[start:start+peak_idx] += np.linspace(0, temp_rise, peak_idx) + np.random.normal(0, 0.1, peak_idx)
 
          # Fall back to normal smoothly with noise
-        pressure[start+peak_idx:end] = np.linspace(pressure[start+peak_idx-1], pressure[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
-        vibration[start+peak_idx:end] = np.linspace(vibration[start+peak_idx-1], vibration[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
-        temperature[start+peak_idx:end] = np.linspace(temperature[start+peak_idx-1], temperature[start-1], fall_len) + np.random.normal(0, 0.2, fall_len)
+        pressure[start+peak_idx:end] = np.linspace(pressure[start+peak_idx-1], pressure[start], fall_len) + np.random.normal(0, 0.2, fall_len)
+        vibration[start+peak_idx:end] = np.linspace(vibration[start+peak_idx-1], vibration[start], fall_len) + np.random.normal(0, 0.2, fall_len)
+        temperature[start+peak_idx:end] = np.linspace(temperature[start+peak_idx-1], temperature[start], fall_len) + np.random.normal(0, 0.2, fall_len)
         
     label[start:end] = "leak+temp+vibration"
 
@@ -227,11 +227,11 @@ def generate_leak_temp_vibration_fault(sample_id, mode="start", intensity="high"
     })
 
     # Save data
-    save_with_metadata(df , "leak+temp+vib" , mode , intensity , sample_id)
+    save_with_metadata(df , "leak+temp+vibration" , mode , intensity , sample_id)
 
 
 # Function to generate all combinations of leak and blockage faults
-def generate_all_leak_blockage():
+def generate_all_faults():
     wid = 1
     for mode in [ "start" , "recover"]:
             for intensity in ["low", "high"]:
@@ -242,6 +242,6 @@ def generate_all_leak_blockage():
     print(f" All faults generated. Metadata saved at {METADATA_FILE}")
 #  generate all combinations
 if __name__ == "__main__":
-    generate_all_leak_blockage()
+    generate_all_faults()
     
     
