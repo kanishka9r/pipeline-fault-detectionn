@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import os
+import time
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -13,6 +14,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+import hashlib
 
 
 # Constants
@@ -117,7 +119,7 @@ class CNN_LSTM_MTL(nn.Module):
         x = x.permute(0, 2, 1)  # (B, F, T)
         x = self.cnn(x)         # (B, F_out, T//2)
         x = x.permute(0, 2, 1)  # (B, T//2, F_out)
-        lstm_out, _ = self.lstm(x)   # (B, T//2, hidden)
+        lstm_out, _ = self.lstm(x)  # (B, T//2, hidden)
         attn_logits = self.attn(lstm_out)             # (B, T, 1)
         attn_weights = torch.softmax(attn_logits, dim=1)  # (B, T, 1)
         context = torch.sum(attn_weights * lstm_out, dim=1)  # (B, hidden*2)
@@ -127,7 +129,24 @@ class CNN_LSTM_MTL(nn.Module):
 # Dataset loading and splitting
 dataset, label_encoder = build_dataset_from_folder(data_dir)
 N = len(dataset)
+all_X = torch.stack([dataset[i][0] for i in range(len(dataset))]).numpy()
+#Duplicate segments
+def fp(x):
+    return hashlib.md5(x.tobytes()).hexdigest()
+fps = [fp(all_X[i]) for i in range(N)]
+
+print("Total segments:", N)
+print("Unique segments:", len(set(fps)))
+print("Duplicate segments:", N - len(set(fps)))
+print("\n------------------------------------------\n")
+
 train_idx, val_idx = train_test_split(list(range(N)), test_size=0.2, random_state=42, stratify=[dataset[i][1].item() for i in range(N)])
+train_fps = [fps[i] for i in train_idx]
+val_fps = [fps[i] for i in val_idx]
+intersection = set(train_fps).intersection(set(val_fps))
+print("Train–Val overlap segments:", len(intersection))
+print("\n------------------------------------------\n")
+
 train_set = Subset(dataset, train_idx)
 val_set = Subset(dataset, val_idx)
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, drop_last=False)
@@ -141,7 +160,6 @@ class_weights_np = compute_class_weight(
     y=labels_list
 )
 class_weights = torch.tensor(class_weights_np, dtype=torch.float32).to(device)
-print("\nClass Weights (for balanced training):", class_weights_np)
 
 #Model preparation
 model = CNN_LSTM_MTL(input_size=3, cnn_channels=64, lstm_hidden=256, num_classes=num_classes).to(device)
@@ -155,7 +173,9 @@ patience_cnt = 0
 train_acc_history = []
 val_acc_history = []
 
+start_time = time.time()
 for epoch in range(1, num_epoch + 1):
+    epoch_start = time.time()
     #train model
     model.train()
     train_loss_sum = 0.0
@@ -244,8 +264,17 @@ for epoch in range(1, num_epoch + 1):
         patience_cnt += 1
         if patience_cnt >= patience:
             print("Early stopping triggered.")
+            epoch_end = time.time()
+            print(f"Epoch {epoch} time: {epoch_end - epoch_start:.2f} seconds")
             break
-
+    epoch_end = time.time()
+    print(f"[EPOCH {epoch}] Total Time: {epoch_end - epoch_start:.2f} seconds\n")    
+end_time = time.time()
+total_time = end_time - start_time
+print("\n================ TRAINING TIME SUMMARY ================")
+print(f"Total Training Time: {total_time:.2f} seconds")
+print(f"Average Time per Epoch: {total_time / epoch:.2f} seconds")
+print("========================================================")
 # Final evaluation (load best and print classification report + regression MAE)
 saved_model = torch.load('data/models/best_cnn_lstm_mtl.pt', map_location=device , weights_only = False)
 model.load_state_dict(saved_model['model_state_dict'])

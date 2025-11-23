@@ -103,6 +103,29 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
         'mean_problem_error': np.mean(problem_errors)
     }
 
+def visualize_reconstruction_distribution(normal_errors, all_fault_errors):
+    # 97th percentile threshold
+    threshold = np.percentile(normal_errors, 97)
+
+    plt.figure(figsize=(12,7))
+    # Plot Normal Distribution
+    plt.hist(normal_errors, bins=80, alpha=0.6, label='Normal', color='skyblue')
+    # Plot Faulty Distribution
+    plt.hist(all_fault_errors, bins=80, alpha=0.6, label='All fault', color='salmon')
+    # Threshold Line
+    plt.axvline(threshold, color='black', linestyle='--', linewidth=2, label=f'97th Percentile Threshold = {threshold:.4f}')
+    plt.xscale('log')
+    # Labels
+    plt.xlabel('Reconstruction Error')
+    plt.ylabel('Frequency')
+    plt.title(f'Reconstruction Error Distribution (Normal vs all fault)')
+    plt.legend()
+    plt.grid(axis='y', alpha=0.4)
+    plt.savefig("normal_vs_all_faults.png", dpi=300)
+    plt.close()
+    print(f"Saved distribution plot: noraml vs all")
+
+
 # Main 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = LSTMAutoencoder(input_size=3).to(device)
@@ -119,6 +142,8 @@ base_path = './data/problems/normalized_data'
 groups = ['sensor_fault', 'faults', 'combined']
 
 all_results = []
+all_fault_errors = []
+
 
 for group in groups:
     group_path = os.path.join(base_path, group)
@@ -144,8 +169,10 @@ for group in groups:
         
             case_name = f"{fault_type}_{intensity}"
             result = metrics_and_plot(normal_errors, errors, group , case_name)
+            all_fault_errors.extend(errors.tolist())
             if result:
-                all_results.append(result)
+                all_results.append(result)  
+
 
 # Save CSV
 csv_file = 'reconstruction_metrics.csv'
@@ -156,3 +183,4 @@ with open(csv_file, 'w', newline='') as f:
         writer.writerow(row)
 
 print(f"\nAll metrics saved to {csv_file}")
+visualize_reconstruction_distribution(normal_errors, all_fault_errors)

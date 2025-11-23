@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import joblib
-
-
+import matplotlib.pyplot as plt
 
 # Load and combine normal data
 def load_and_combine_normal_data(path):
@@ -59,7 +58,7 @@ class LSTMAutoencoder(nn.Module):
         dec_out = self.output_layer(dec_out)
         return dec_out    
 
-
+loss_history=[]
 # Train the autoencoder on the normal data
 def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
     dataset = TensorDataset(torch.tensor(data, dtype=torch.float32))
@@ -79,6 +78,7 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+        loss_history.append(total_loss);    
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss:.4f}")    
 
 # Compute reconstruction error on normal data
@@ -118,10 +118,18 @@ if __name__ == "__main__":
     data_seq = full_data[:num_seqs * SEQ_LEN].reshape(num_seqs, SEQ_LEN, 3)
     split_idx = int(0.8 * len(data_seq))  # 80% train, 20% val
     train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
-
     # Initialize and train autoencoder
     model = LSTMAutoencoder()
     train_autoencoder(model, train_data, epochs=50)
+
+    plt.figure(figsize=(10,5))
+    plt.plot(loss_history, label="Training Loss", color='blue')
+    plt.title("Autoencoder Training Loss Curve ")
+    plt.xlabel("Epoch")
+    plt.ylabel("Reconstruction Loss (MSE)")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
 
     # Save model
     torch.save(model.state_dict(), "data/models/autoencoder.pt")
@@ -149,7 +157,3 @@ if __name__ == "__main__":
     total_errors = len(flat_errors)
     print(f"\n False Positives on Normal Validation: {num_anomalies}/{total_errors} ({(num_anomalies / total_errors) * 100:.2f}%)")
     print(f"Accuracy on Clean Data: {(1 - num_anomalies / total_errors) * 100:.2f}%")
-    
-  
-
-
