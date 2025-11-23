@@ -3,3 +3,6 @@ extra.docx
 
 # Ignore temporary files
 data/
+__pycache__/
+*.pyc
+
