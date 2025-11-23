@@ -1,8 +1,10 @@
 # Ignore specific file
 extra.docx
+synopsis.docx
 
 # Ignore temporary files
 data/
 __pycache__/
 *.pyc
+
 
