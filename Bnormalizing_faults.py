@@ -35,8 +35,3 @@ for root, dirs, files in os.walk(input_base):
 
 print(f"Processed and saved: {output_path}") 
 print(count)
-
-           
-
-
-                      
