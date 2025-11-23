@@ -10,7 +10,7 @@ from scipy.stats import ks_2samp, gaussian_kde
 from sklearn.metrics import roc_auc_score
 
 # Two-level thresholds (global defaults)
-LOW_THRESHOLD = 0.01     # for low-intensity / early fault
+LOW_THRESHOLD = 0.0085  # for low-intensity / early fault
 HIGH_THRESHOLD = 0.04    # for high-intensity / strong fault
 
 # Function to get structured label from file path

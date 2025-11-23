@@ -103,28 +103,30 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
         'mean_problem_error': np.mean(problem_errors)
     }
 
-def visualize_reconstruction_distribution(normal_errors, all_fault_errors):
-    # 97th percentile threshold
-    threshold = np.percentile(normal_errors, 97)
-
+def plot_cdf(normal_errors, all_fault_errors, T_low=0.0085, T_high=0.042):
+    # Sort values for CDF
+    norm_sorted = np.sort(normal_errors)
+    fault_sorted = np.sort(all_fault_errors)
+    # Compute CDF values
+    norm_cdf = np.arange(len(norm_sorted)) / float(len(norm_sorted))
+    fault_cdf = np.arange(len(fault_sorted)) / float(len(fault_sorted))
     plt.figure(figsize=(12,7))
-    # Plot Normal Distribution
-    plt.hist(normal_errors, bins=80, alpha=0.6, label='Normal', color='skyblue')
-    # Plot Faulty Distribution
-    plt.hist(all_fault_errors, bins=80, alpha=0.6, label='All fault', color='salmon')
-    # Threshold Line
-    plt.axvline(threshold, color='black', linestyle='--', linewidth=2, label=f'97th Percentile Threshold = {threshold:.4f}')
+    # Plot Normal CDF
+    plt.plot(norm_sorted, norm_cdf, label="Normal CDF", linewidth=2, color='blue')
+    # Plot Fault CDF
+    plt.plot(fault_sorted, fault_cdf, label="All Faults CDF", linewidth=2, color='red')
+    # Threshold Lines
+    plt.axvline(T_low, color='green', linestyle='--', linewidth=2,label=f"Low Threshold = {T_low}")
+    plt.axvline(T_high, color='black', linestyle='--', linewidth=2,label=f"High Threshold = {T_high}")
+    plt.xlabel("Reconstruction Error")
+    plt.ylabel("CDF")
     plt.xscale('log')
-    # Labels
-    plt.xlabel('Reconstruction Error')
-    plt.ylabel('Frequency')
-    plt.title(f'Reconstruction Error Distribution (Normal vs all fault)')
+    plt.title("CDF Comparison: Normal vs All Faults")
+    plt.grid(alpha=0.4)
     plt.legend()
-    plt.grid(axis='y', alpha=0.4)
-    plt.savefig("normal_vs_all_faults.png", dpi=300)
+    plt.savefig("cdf_normal_vs_faults.png", dpi=300)
     plt.close()
-    print(f"Saved distribution plot: noraml vs all")
-
+    print("Saved: cdf_normal_vs_faults.png")
 
 # Main 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -183,4 +185,4 @@ with open(csv_file, 'w', newline='') as f:
         writer.writerow(row)
 
 print(f"\nAll metrics saved to {csv_file}")
-visualize_reconstruction_distribution(normal_errors, all_fault_errors)
+plot_cdf(normal_errors, all_fault_errors)
