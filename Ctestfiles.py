@@ -14,6 +14,8 @@ torch.manual_seed(42)
 random.seed(42)
 
 torch.backends.cudnn.enabled = False  
+graphs = "data/problems/graphs"
+os.makedirs(graphs, exist_ok=True)
 
 class LSTMAutoencoder(nn.Module):
     def __init__(self, input_size=3, hidden_size=64, latent_size=32):
@@ -89,7 +91,7 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
     plt.ylabel('Frequency')
     plt.title(f'Reconstruction Error: Normal vs {case_name}')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.savefig(f'hist_{case_name.replace("+","_")}.png')
+    plt.savefig(os.path.join(graphs, f"hist_{case_name.replace('+','_')}.png"), dpi=300)
     plt.close()
     
     return {
@@ -124,9 +126,8 @@ def plot_cdf(normal_errors, all_fault_errors, T_low=0.0085, T_high=0.042):
     plt.title("CDF Comparison: Normal vs All Faults")
     plt.grid(alpha=0.4)
     plt.legend()
-    plt.savefig("cdf_normal_vs_faults.png", dpi=300)
+    plt.savefig(os.path.join(graphs, "cdf_normal_vs_faults.png"), dpi=300)
     plt.close()
-    print("Saved: cdf_normal_vs_faults.png")
 
 # Main 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -140,7 +141,7 @@ normal_data = pd.read_csv('./data/normal/normal_combined.csv').iloc[:, 0:3].valu
 normal_errors = reconstruction_error(model, normal_data, device)
 
 # Problem folders
-base_path = './data/problems/normalized_data'
+base_path = './data/problem2/normalized_data'
 groups = ['sensor_fault', 'faults', 'combined']
 
 all_results = []

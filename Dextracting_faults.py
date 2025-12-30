@@ -6,12 +6,15 @@ from pathlib import Path
 from Aautoencoder import LSTMAutoencoder
 from scipy.ndimage import label
 import matplotlib.pyplot as plt
-from scipy.stats import ks_2samp, gaussian_kde
-from sklearn.metrics import roc_auc_score
 
-# Two-level thresholds (global defaults)
-LOW_THRESHOLD = 0.0085  # for low-intensity / early fault
-HIGH_THRESHOLD = 0.04    # for high-intensity / strong fault
+
+df = pd.read_csv("reconstruction_metrics.csv")
+
+low = df[df["case_name"].str.contains("_low", case=False)]["optimal_threshold"].mean()
+print(low)
+high = df[df["case_name"].str.contains("_high", case=False)]["optimal_threshold"].mean()
+print(high)
+
 
 # Function to get structured label from file path
 def get_structured_label(file_path):
@@ -137,7 +140,8 @@ def extract_anomaly_segments(model, base_dir, save_dir, segment_length=60 , low_
                             segment = np.pad(segment, ((0, pad_len), (0, 0)), mode='edge')
 
                         label_name = get_structured_label(file_path)
-                        save_name = f"{label_name}_{level.lower()}_seg{seg_id}_{sub_id+1}.csv"
+                        src_name = Path(file_path).stem
+                        save_name = f"{label_name}_{src_name}_{level.lower()}_seg{seg_id}_{sub_id+1}.csv"
                         save_path = os.path.join(save_root, save_name)
                         pd.DataFrame(segment, columns=["Vibration", "Pressure", "Temperature"]).to_csv(save_path, index=False)
 
@@ -146,8 +150,9 @@ def extract_anomaly_segments(model, base_dir, save_dir, segment_length=60 , low_
                         else:
                             count_high += 1
 
-    print(f"\n Total LOW-intensity segments saved: {count_low}")
-    print(f" Total HIGH-intensity segments saved: {count_high}")
+    print(f"\n total low-intensity segments saved: {count_low}")
+    print(f" total high-intensity segments saved: {count_high}")
+
 
 #  Main 
 if __name__ == "__main__":
@@ -155,14 +160,13 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load("data/models/autoencoder.pt"))
     model.eval()
 
-    thresholds = load_thresholds("data/reconstruction_metrics.csv")
     _, _, _, default_threshold = np.load("data/scalers/autoencoder_error_stats.npy", allow_pickle=True)
     extract_anomaly_segments(model=model,
-                             base_dir="data/problems/normalized_data",
-                             save_dir="data/problems/extracted_faults",
+                             base_dir="data/problem2/normalized_data",
+                             save_dir="data/problem2/extracted_faults",
                              segment_length=60,
-                             low_th=LOW_THRESHOLD,
-                             high_th=HIGH_THRESHOLD)
+                             low_th=low,
+                             high_th=high)
     
 
    

@@ -10,7 +10,7 @@ count = 0
 
 # set input and output directories
 input_base = 'data/problems'
-output_base = 'data/problems/normalized_data'
+output_base = 'data/problem2/normalized_data'
 
 
 # loop through all CSV files in the input directory

@@ -1,10 +1,12 @@
 # Ignore specific file
 extra.docx
 synopsis.docx
+x.py
 
 # Ignore temporary files
 data/
 __pycache__/
 *.pyc
+reconstruction_metrics.csv
 
 

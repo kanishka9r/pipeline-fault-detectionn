@@ -132,8 +132,9 @@ if __name__ == "__main__":
     plt.show()
 
     # Save model
+    os.makedirs("data/models", exist_ok=True)
     torch.save(model.state_dict(), "data/models/autoencoder.pt")
-
+  
     # Compute reconstruction error on normal data
     errors = compute_reconstruction_error(model, val_data)
 
