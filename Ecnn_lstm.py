@@ -18,7 +18,7 @@ import hashlib
 
 
 # Constants
-data_dir= "data/problems/extracted_faults"  
+data_dir= "data/problem2/extracted_faults"  
 batch_size = 32
 lr = 1e-4
 num_epoch = 50
@@ -41,7 +41,9 @@ def get_label_from_filename(filename):
     # Remove trailing _segX_Y if present
     if "_seg" in name:
         name = name.split("_seg")[0]
-    return name  # e.g. "fault_leak_low"
+    parts = name.split("_")   
+    main_class = f"{parts[0]}_{parts[1]}"
+    return main_class 
 
 
 # Function to build dataset from folder structure

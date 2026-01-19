@@ -1,7 +1,7 @@
 # Ignore specific file
 extra.docx
 synopsis.docx
-x.py
+countfaults.py
 
 # Ignore temporary files
 data/

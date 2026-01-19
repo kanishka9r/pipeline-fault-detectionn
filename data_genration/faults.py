@@ -4,22 +4,22 @@ import os
 import random
 
 # Constants for synthetic data
-DURATION = 600  # 10 minutes
-SAMPLE_RATE = 1 # 1Hz
-N_SAMPLES = DURATION * SAMPLE_RATE
+duration = 600  # 10 minutes
+sample_rate = 1 # 1Hz
+n_sample= duration * sample_rate
 np.random.seed(42)
 random.seed(42)
 
-ROOT_DIR = os.path.join("..", "data", "problems", "faults")
-METADATA_FILE = os.path.join("..", "data", "metadata.csv")
-os.makedirs(ROOT_DIR, exist_ok=True)
-if  os.path.exists(METADATA_FILE):
-    os.remove(METADATA_FILE)
-pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(METADATA_FILE, index=False)
+root_dir = os.path.join("..", "data", "problems", "faults")
+metadata_file = os.path.join("..", "data", "metadata.csv")
+os.makedirs(root_dir, exist_ok=True)
+if  os.path.exists(metadata_file):
+    os.remove(metadata_file)
+pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(metadata_file, index=False)
 
 # save data with metadata
 def save_with_metadata(df, fault_type,  mode, intensity , uid):
-    out_dir = os.path.join(ROOT_DIR, fault_type,f"{intensity}",  mode)
+    out_dir = os.path.join(root_dir, fault_type,f"{intensity}",  mode)
     os.makedirs(out_dir, exist_ok=True)
     filename = f"{fault_type}_{mode}_{intensity}_{uid:04d}.csv"
     file_path = os.path.join(out_dir, filename)
@@ -32,30 +32,30 @@ def save_with_metadata(df, fault_type,  mode, intensity , uid):
         "intensity": intensity,
         "file_path": file_path
     }
-    pd.DataFrame([row]).to_csv(METADATA_FILE, mode="a", header=False, index=False)
+    pd.DataFrame([row]).to_csv(metadata_file, mode="a", header=False, index=False)
 
 # function to get the fault window based on mode
 def get_fault_window(mode):
     if mode == "start":
-        return 0, N_SAMPLES
+        return 0, n_sample
     elif mode == "recover":
-        start = random.randint(N_SAMPLES // 4, N_SAMPLES // 3)
-        end = min(start + N_SAMPLES // 3, N_SAMPLES)
+        start = random.randint(n_sample // 4, n_sample // 3)
+        end = min(start + n_sample // 3, n_sample)
         return start, end
     else:
         raise ValueError("Invalid mode")
     
 def generate_baseline():
     return (
-        np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=N_SAMPLES),  # vibration
-        np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=N_SAMPLES),     # pressure
-        np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=N_SAMPLES),     # temperature
-        np.array(["normal"]*N_SAMPLES)  # label
+        np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=n_sample),  # vibration
+        np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=n_sample),     # pressure
+        np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=n_sample),     # temperature
+        np.array(["normal"]*n_sample)  # label
     )   
         
 # Leak Fault
 def generate_leak_fault(sample_id, mode="start", intensity="high"):
-    time = np.arange(N_SAMPLES)
+    time = np.arange(n_sample)
 
     vibration, pressure, temperature, label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
@@ -108,7 +108,7 @@ def generate_leak_fault(sample_id, mode="start", intensity="high"):
 
 # Blockage Fault
 def generate_blockage_fault(sample_id, mode="start", intensity="high"):
-    time = np.arange(N_SAMPLES)
+    time = np.arange(n_sample)
 
     vibration, pressure, temperature, label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
@@ -159,7 +159,7 @@ def generate_blockage_fault(sample_id, mode="start", intensity="high"):
 
 # Temperature Fault 
 def generate_temperature_fault(sample_id, mode="start", intensity="high"):
-    time = np.arange(N_SAMPLES)
+    time = np.arange(n_sample)
 
     vibration, pressure, temperature, label = generate_baseline()
     fault_start, fault_end = get_fault_window(mode)
@@ -217,7 +217,7 @@ def generate_all_faults(n_samples=25):
                     generate_leak_fault(wid, mode=mode , intensity= intensity) ; wid += 1
                     generate_blockage_fault(wid , mode=mode , intensity = intensity) ; wid += 1
                     generate_temperature_fault(wid , mode=mode , intensity = intensity)   ; wid += 1
-    print(f" All faults generated. Metadata saved at {METADATA_FILE}")
+    print(f" All faults generated. Metadata saved at {metadata_file}")
 
 
 # Run the generation
