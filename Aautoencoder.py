@@ -113,9 +113,9 @@ if __name__ == "__main__":
     full_data = df.values
 
     # Reshape into sequences of 600 (10 min segments at 1Hz)
-    SEQ_LEN = 600
-    num_seqs = full_data.shape[0] // SEQ_LEN
-    data_seq = full_data[:num_seqs * SEQ_LEN].reshape(num_seqs, SEQ_LEN, 3)
+    seq_len = 600
+    num_seqs = full_data.shape[0] // seq_len
+    data_seq = full_data[:num_seqs * seq_len].reshape(num_seqs, seq_len, 3)
     split_idx = int(0.8 * len(data_seq))  # 80% train, 20% val
     train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
     # Initialize and train autoencoder

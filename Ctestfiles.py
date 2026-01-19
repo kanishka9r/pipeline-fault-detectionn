@@ -12,8 +12,8 @@ import random
 np.random.seed(42)
 torch.manual_seed(42)
 random.seed(42)
-
 torch.backends.cudnn.enabled = False  
+
 graphs = "data/problems/graphs"
 os.makedirs(graphs, exist_ok=True)
 
@@ -61,7 +61,7 @@ def get_errors_from_folder(model, folder, device):
             except:
                 continue
     if all_errors:
-        return np.concatenate(all_errors)
+        return np.concatenate(all_errors) 
     return np.array([])
 
 #  Metrics + histogram 
