@@ -47,9 +47,9 @@ def get_fault_window(mode):
     
 def generate_baseline():
     return (
-        np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=n_sample),  # vibration
-        np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=n_sample),     # pressure
-        np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=n_sample),     # temperature
+        np.random.normal(loc=np.random.uniform(4, 6), scale=1.0, size=n_sample),  # vibration
+        np.random.normal(loc=np.random.uniform(48, 52), scale=2.0, size=n_sample),     # pressure
+        np.random.normal(loc=np.random.uniform(38, 42), scale=1.0, size=n_sample),     # temperature
         np.array(["normal"]*n_sample)  # label
     )   
         
@@ -64,10 +64,10 @@ def generate_leak_fault(sample_id, mode="start", intensity="high"):
     # Generate pressure_drop and vibration_rise based on intensity 
     if intensity == "low":
         max_pressure_drop = 4.0
-        max_vibration_rise = 0.6
+        max_vibration_rise = 2.0
     else:  # high
         max_pressure_drop = 15.0
-        max_vibration_rise = 3.0
+        max_vibration_rise = 5.0
 
     # Jitter
     pressure_jitter = np.random.normal(0, 0.1, fault_len)
@@ -120,7 +120,7 @@ def generate_blockage_fault(sample_id, mode="start", intensity="high"):
         max_vibration_spike = 1.0
     else:  # high
         max_pressure_spike = 18.0
-        max_vibration_spike = 4.0
+        max_vibration_spike = 6.0
 
     # Jitter
     pressure_jitter = np.random.normal(0, 0.5, fault_len)
@@ -167,11 +167,11 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
 
     # Intensity-based effect
     if intensity == "low":
-        max_temp_rise = 6.0
-        max_pressure_drop = 0.6
+        max_temp_rise = 5.0
+        max_pressure_drop = 2.5
     else:  # high
-        max_temp_rise = 30.0
-        max_pressure_drop = 5.0 
+        max_temp_rise = 12.0
+        max_pressure_drop = 8.0 
 
 
     # Jitter

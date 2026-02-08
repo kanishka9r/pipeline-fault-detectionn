@@ -40,9 +40,9 @@ def generate_normal_1(uid):
 
     # scale variation
     drift = np.linspace(0, np.random.uniform(-0.2, 0.2), n_samples)
-    vibration = np.random.normal(loc=1.0, scale=0.05, size=n_samples)
-    pressure = np.random.normal(loc=50, scale=1.0, size=n_samples) + drift
-    temperature = np.random.normal(loc=40, scale=0.5, size=n_samples)
+    vibration = np.random.normal(loc=5.0, scale=1.0, size=n_samples)
+    pressure = np.random.normal(loc=50, scale=2.0, size=n_samples) + drift
+    temperature = np.random.normal(loc=40, scale=1.0, size=n_samples)
 
     # Create a DataFrame with all columns
     df = pd.DataFrame({
@@ -63,7 +63,7 @@ def generate_normal_2(uid):
     
     # scale variation
     drift = np.linspace(0, np.random.uniform(-1.5, 1.5), n_samples)
-    vibration = np.random.normal(loc=1.0, scale=0.1, size=n_samples)
+    vibration = np.random.normal(loc=5.0, scale=0.1, size=n_samples)
     pressure = np.random.normal(loc=50, scale=2.0, size=n_samples) + drift
     temperature = np.random.normal(loc=40, scale=1.0, size=n_samples)
 

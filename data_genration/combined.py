@@ -48,12 +48,12 @@ def get_fault_window(mode):
 # Function to generate baseline data
 def generate_baseline():
     return (
-        np.random.normal(loc=np.random.uniform(0.9, 1.1), scale=0.02, size=n_sample),  # vibration
-        np.random.normal(loc=np.random.uniform(48, 52), scale=0.5, size=n_sample),     # pressure
-        np.random.normal(loc=np.random.uniform(38, 42), scale=0.3, size=n_sample),     # temperature
+        np.random.normal(loc=np.random.uniform(5, 6), scale=1.0, size=n_sample),  # vibration
+        np.random.normal(loc=np.random.uniform(48, 52), scale=2.0, size=n_sample),     # pressure
+        np.random.normal(loc=np.random.uniform(38, 42), scale=1.0, size=n_sample),     # temperature
         np.array(["normal"]*n_sample)       # label
     )    
-    
+
 # Function to generate combined leak and blockage fault    
 def generate_combined_leak_blockage(sample_id, intensity = "high", mode="start"):
     time = np.arange(n_sample)
@@ -63,13 +63,13 @@ def generate_combined_leak_blockage(sample_id, intensity = "high", mode="start")
 
     # Intensity levels
     if intensity == "low":
-        leak_drop = np.random.uniform(2 , 4)
-        vib_rise = np.random.uniform(0.5, 1)
-        blockage_spike = np.random.uniform(2, 4)
+        leak_drop = np.random.uniform(3 , 5)
+        vib_rise = np.random.uniform(3, 4)
+        blockage_spike = np.random.uniform(3, 5)
     else: 
         leak_drop = np.random.uniform(15, 25)
-        vib_rise = np.random.uniform(2, 5)
-        blockage_spike = np.random.uniform(15, 25)
+        vib_rise = np.random.uniform(8, 12)
+        blockage_spike = np.random.uniform(12, 20)
 
     # Apply the fault
     if mode == "start":
@@ -123,11 +123,11 @@ def generate_blockage_pressure_noise_fault(sample_id, mode="start", intensity="h
 
    # Intensity levels
     if intensity == "low":
-        spike_val = np.random.uniform(13, 17)
-        noise_scale = np.random.uniform(3, 4)
+        spike_val = np.random.uniform(4, 6)
+        noise_scale = np.random.uniform(0.6, 1.2)
     else:  # high
-        spike_val = np.random.uniform(40 ,  50)
-        noise_scale = np.random.uniform(20, 25)
+        spike_val = np.random.uniform(16 ,  25)
+        noise_scale = np.random.uniform(3, 6)
 
 
     # Apply the fault
