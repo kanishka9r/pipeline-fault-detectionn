@@ -8,30 +8,29 @@ from torch.utils.data import DataLoader, TensorDataset
 import joblib
 import matplotlib.pyplot as plt
 
-# Load and combine normal data
-def load_and_combine_normal_data(path):
-    all_data = []
-    for subfolder in ['normal_1', 'normal_2']:
-        folder_path = os.path.join(path, subfolder)
-        for file in os.listdir(folder_path):
-            if file.endswith('.csv'):
-                df = pd.read_csv(os.path.join(folder_path, file))
-                 # Only keep vibration, pressure, and temperature columns
-                all_data.append(df.iloc[:, 1:4].values)
-    # Stack vertically to get a single array of shape (total_samples, 3)
-    combined_data = np.vstack(all_data)
-    return combined_data
+# Load normal CSVs as sequences
+def load_normal_sequences(path, seq_len=600):
+    sequences = []
+    for subfolder in ["normal_1", "normal_2"]:
+        folder = os.path.join(path, subfolder)
+        for file in os.listdir(folder):
+            if file.endswith(".csv"):
+                df = pd.read_csv(os.path.join(folder, file))
+                seq = df.iloc[:, 1:4].values
+                if seq.shape[0] == seq_len:
+                    sequences.append(seq)
+    return np.array(sequences)
 
-# Normalize the combined data and save as CSV
-def normalize_and_save(data, out_path):
+# Per-sequence normalization
+def normalize_sequences(seqs):
+    N, T, C = seqs.shape
+    flat = seqs.reshape(-1, C)        # (N*600,3)
     scaler = MinMaxScaler()
-    normalized = scaler.fit_transform(data)
-    df_normalized = pd.DataFrame(normalized, columns=['vibration', 'pressure', 'temperature'])
-    df_normalized.to_csv(out_path, index=False)
-    print(f"Saved normalized data to: {out_path}")
+    flat_norm = scaler.fit_transform(flat)
     os.makedirs("data/scalers", exist_ok=True)
-    joblib.dump(scaler, 'data/scalers/minmax_scaler.pkl')
-    print("Saved MinMaxScaler to: data/scalers/minmax_scaler.pkl")
+    joblib.dump(scaler, "data/scalers/minmax_scaler.pkl")
+    norm_seqs = flat_norm.reshape(N, T, C)
+    return norm_seqs
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -40,7 +39,7 @@ print(device)
 # Define LSTM Autoencoder
 class LSTMAutoencoder(nn.Module):
     def __init__(self, input_size=3, hidden_size=64, latent_size=32):
-        super(LSTMAutoencoder, self).__init__()
+        super().__init__()
         self.encoder_lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.bottleneck = nn.Linear(hidden_size, latent_size)
         self.decoder_input = nn.Linear(latent_size, hidden_size)
@@ -50,13 +49,12 @@ class LSTMAutoencoder(nn.Module):
     def forward(self, x):
         # Encode
         enc_out, _ = self.encoder_lstm(x)
-        bottleneck = self.bottleneck(enc_out[:, -1, :])  # last time step only
-        bottleneck = bottleneck.unsqueeze(1).repeat(1, x.size(1), 1)
-        # Decode
-        dec_input = self.decoder_input(bottleneck)
-        dec_out, _ = self.decoder_lstm(dec_input)
-        dec_out = self.output_layer(dec_out)
-        return dec_out    
+        pooled = torch.mean(enc_out, dim=1)          
+        z = self.bottleneck(pooled)
+        z = z.unsqueeze(1).repeat(1, x.size(1), 1)
+        dec_in = self.decoder_input(z)
+        dec_out, _ = self.decoder_lstm(dec_in)
+        return self.output_layer(dec_out)    
 
 loss_history=[]
 # Train the autoencoder on the normal data
@@ -77,18 +75,20 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-        loss_history.append(total_loss);    
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss:.4f}")    
+            total_loss += loss.item() 
+        epoch_loss = total_loss / len(dataloader)
+        loss_history.append(epoch_loss);    
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")    
 
 # Compute reconstruction error on normal data
-def compute_reconstruction_error(model, data):
+def compute_sequence_error(model, data_seq):
     model.eval()
     with torch.no_grad():
-        inputs = torch.tensor(data, dtype=torch.float32).to(device)
-        outputs = model(inputs)
-        errors = torch.mean((outputs - inputs) ** 2, dim= 2 ).cpu().numpy()
-    return errors
+        x = torch.tensor(data_seq, dtype=torch.float32).to(device)
+        out = model(x)
+        seq_errors = torch.mean((out - x) ** 2, dim=(1,2))  # (num_seq,)
+    return seq_errors.cpu().numpy()
+
 
 # Determine threshold for anomaly detection
 def determine_threshold(errors, method='percentile', value=97):
@@ -102,20 +102,11 @@ def determine_threshold(errors, method='percentile', value=97):
 # run the main process
 if __name__ == "__main__":
 
-    data_path = 'data/normal'
-    out_csv = 'data/normal/normal_combined.csv'
-
     # Load and normalize normal data
-    normal_data = load_and_combine_normal_data(data_path)
-    normalize_and_save(normal_data, out_csv)   
-    # Load normalized data
-    df = pd.read_csv('data/normal/normal_combined.csv')
-    full_data = df.values
+    data_seq = load_normal_sequences("data/normal")
+    data_seq = normalize_sequences(data_seq)
 
     # Reshape into sequences of 600 (10 min segments at 1Hz)
-    seq_len = 600
-    num_seqs = full_data.shape[0] // seq_len
-    data_seq = full_data[:num_seqs * seq_len].reshape(num_seqs, seq_len, 3)
     split_idx = int(0.8 * len(data_seq))  # 80% train, 20% val
     train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
     # Initialize and train autoencoder
@@ -136,25 +127,17 @@ if __name__ == "__main__":
     torch.save(model.state_dict(), "data/models/autoencoder.pt")
   
     # Compute reconstruction error on normal data
-    errors = compute_reconstruction_error(model, val_data)
+    errors = compute_sequence_error(model, val_data)
 
     # Set threshold
-    flat_errors = errors.flatten()
-    threshold = determine_threshold(flat_errors, method='percentile', value=97)
-    min_error = float(np.min(flat_errors))
-    max_error = float(np.max(flat_errors))  
-    mean_error = float(np.mean(flat_errors))
-    threshold = float(np.percentile(flat_errors, 97))
-    print("Min error:", min_error)
-    print("Max error:", max_error)
-    print("Mean error:", mean_error)
+    threshold = np.percentile(errors, 97)
+    print("Min seq error:", errors.min())
+    print("Max seq error:", errors.max())
+    print("Mean seq error:", errors.mean())
     print("97th percentile:", threshold)
-    np.save("data/scalers/autoencoder_error_stats.npy", np.array([min_error, max_error, mean_error, threshold]))
-    print(f"Saved Autoencoder error stats: min={min_error}, max={max_error}")
 
     # Evaluate false positives on normal validation set
-    anomalies = flat_errors > threshold
-    num_anomalies = np.sum(anomalies)
-    total_errors = len(flat_errors)
-    print(f"\n False Positives on Normal Validation: {num_anomalies}/{total_errors} ({(num_anomalies / total_errors) * 100:.2f}%)")
-    print(f"Accuracy on Clean Data: {(1 - num_anomalies / total_errors) * 100:.2f}%")
+    num_fp = np.sum(errors > threshold)
+    total = len(errors)
+    print(f"False Positives: {num_fp}/{total} ({100*num_fp/total:.2f}%)")
+    print(f"Accuracy on Normal Data: {100*(1-num_fp/total):.2f}%")

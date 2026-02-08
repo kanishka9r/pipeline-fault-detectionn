@@ -2,14 +2,13 @@ import os
 import pandas as pd
 import joblib
 from pathlib import Path
+from sklearn.preprocessing import MinMaxScaler
 
-# Load the saved scaler
-scaler = joblib.load('data/scalers/minmax_scaler.pkl')
 count = 0
-
 # set input and output directories
 input_base = 'data/problems'
 output_base = 'data/problem2/normalized_data'
+scaler = joblib.load("data/scalers/minmax_scaler.pkl")
 
 # loop through all CSV files in the input directory
 for root, dirs, files in os.walk(input_base):
@@ -20,8 +19,8 @@ for root, dirs, files in os.walk(input_base):
             output_path = os.path.join(output_base, rel_path)
             df = pd.read_csv(input_path)
             # Read only vibration, pressure, temperature columns
-            features = df[['vibration', 'pressure', 'temperature']]            # Normalize
-            normalized = scaler.transform(features.values)
+            features = df[['vibration', 'pressure', 'temperature']].values          # Normalize
+            normalized = scaler.transform(features)
             # Replace with normalized values
             df[['vibration', 'pressure', 'temperature']] = normalized
             # Ensure output directory exists
@@ -29,4 +28,4 @@ for root, dirs, files in os.walk(input_base):
             # Save to processed folder
             df.to_csv(output_path, index=False)
             count = count + 1 
-print(count)
+print("Total normalized files:", count)
