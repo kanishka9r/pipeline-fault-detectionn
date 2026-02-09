@@ -8,14 +8,13 @@ from scipy.stats import ks_2samp
 from sklearn.metrics import roc_curve, auc
 import csv
 import random
+import joblib
 
+scaler = joblib.load("data/scalers/minmax_scaler.pkl")
 np.random.seed(42)
 torch.manual_seed(42)
 random.seed(42)
 torch.backends.cudnn.enabled = False  
-
-graphs = "data/problems/graphs"
-os.makedirs(graphs, exist_ok=True)
 
 class LSTMAutoencoder(nn.Module):
     def __init__(self, input_size=3, hidden_size=64, latent_size=32):
@@ -28,41 +27,44 @@ class LSTMAutoencoder(nn.Module):
 
     def forward(self, x):
         enc_out, _ = self.encoder_lstm(x)
-        bottleneck = self.bottleneck(enc_out[:, -1, :])
-        bottleneck = bottleneck.unsqueeze(1).repeat(1, x.size(1), 1)
-        dec_input = self.decoder_input(bottleneck)
-        dec_out, _ = self.decoder_lstm(dec_input)
+        pooled = torch.mean(enc_out, dim=1)      
+        z = self.bottleneck(pooled)
+        z = z.unsqueeze(1).repeat(1, x.size(1), 1)
+        dec_in = self.decoder_input(z)
+        dec_out, _ = self.decoder_lstm(dec_in)
         return self.output_layer(dec_out)
 
 # Compute reconstruction error
 def reconstruction_error(model, data, device):
-    data_tensor = torch.tensor(data, dtype=torch.float32).to(device).contiguous()
+    x = torch.tensor(data, dtype=torch.float32).unsqueeze(0).to(device)
     with torch.no_grad():
-        output = model(data_tensor.unsqueeze(0))
-        errors = ((output - data_tensor.unsqueeze(0)) ** 2).mean(dim=2).cpu().numpy().flatten()
-    return errors
+        out = model(x)
+        seq_error = torch.mean((out - x) ** 2).item()
+    return np.array([seq_error])
 
-#  folder scan
+def get_normal_errors(model, normal_base, device):
+    errors = []
+    for sub in ["normal_1", "normal_2"]:
+        folder = os.path.join(normal_base, sub)
+        for f in os.listdir(folder):
+            if f.endswith(".csv"):
+                raw = pd.read_csv(os.path.join(folder, f)).iloc[:, 1:4].values
+                if raw.shape[0] == 600:
+                    data = scaler.transform(raw)
+                    err = reconstruction_error(model, data, device)
+                    errors.append(err.item())
+    return np.array(errors)
+
 def get_errors_from_folder(model, folder, device):
-    all_errors = []
-    for root, dirs, files in os.walk(folder):
+    errors = []
+    for root, _, files in os.walk(folder):
         for f in files:
-            if not f.endswith(".csv"):
-                continue
-            path = os.path.join(root, f)
-            try:
-                # Take only vibration, pressure, temperature
-                data = pd.read_csv(path).iloc[:, 1:4].values.astype(np.float32)
-                if data.shape[0] == 0:
-                    continue
-                errs = reconstruction_error(model, data, device)
-                if len(errs) > 0:
-                    all_errors.append(errs)
-            except:
-                continue
-    if all_errors:
-        return np.concatenate(all_errors) 
-    return np.array([])
+            if f.endswith(".csv"):
+                data = pd.read_csv(os.path.join(root, f)).iloc[:, 1:4].values
+                if data.shape[0] == 600:
+                    err = reconstruction_error(model, data, device)
+                    errors.append(err.item())
+    return np.array(errors)
 
 #  Metrics + histogram 
 def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
@@ -71,7 +73,7 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
         return None
 
     ks_stat, p_value = ks_2samp(normal_errors, problem_errors)
-    labels = np.concatenate([np.zeros_like(normal_errors), np.ones_like(problem_errors)])
+    labels = np.concatenate([np.zeros(len(normal_errors)),np.ones(len(problem_errors))])
     scores = np.concatenate([normal_errors, problem_errors])
     fpr, tpr, thresholds = roc_curve(labels, scores)
     auroc = auc(fpr, tpr)
@@ -80,19 +82,6 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
 
     print(f"\n{case_type}: {case_name}")
     print(f"KS={ks_stat:.4f}, p={p_value:.4f}, AUROC={auroc:.4f}, Threshold={optimal_threshold:.4f}")
-    
-    # Plot
-    plt.figure(figsize=(10,6))
-    plt.hist(normal_errors, bins=50, alpha=0.6, label='Normal', color='skyblue')
-    plt.hist(problem_errors, bins=50, alpha=0.6, label=case_name, color='salmon')
-    plt.axvline(optimal_threshold, color='black', linestyle='--', label=f'Threshold={optimal_threshold:.2f}')
-    plt.legend()
-    plt.xlabel('Reconstruction Error')
-    plt.ylabel('Frequency')
-    plt.title(f'Reconstruction Error: Normal vs {case_name}')
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.savefig(os.path.join(graphs, f"hist_{case_name.replace('+','_')}.png"), dpi=300)
-    plt.close()
     
     return {
         'case_type': case_type,
@@ -105,30 +94,6 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
         'mean_problem_error': np.mean(problem_errors)
     }
 
-def plot_cdf(normal_errors, all_fault_errors, T_low=0.0085, T_high=0.042):
-    # Sort values for CDF
-    norm_sorted = np.sort(normal_errors)
-    fault_sorted = np.sort(all_fault_errors)
-    # Compute CDF values
-    norm_cdf = np.arange(len(norm_sorted)) / float(len(norm_sorted))
-    fault_cdf = np.arange(len(fault_sorted)) / float(len(fault_sorted))
-    plt.figure(figsize=(12,7))
-    # Plot Normal CDF
-    plt.plot(norm_sorted, norm_cdf, label="Normal CDF", linewidth=2, color='blue')
-    # Plot Fault CDF
-    plt.plot(fault_sorted, fault_cdf, label="All Faults CDF", linewidth=2, color='red')
-    # Threshold Lines
-    plt.axvline(T_low, color='green', linestyle='--', linewidth=2,label=f"Low Threshold = {T_low}")
-    plt.axvline(T_high, color='black', linestyle='--', linewidth=2,label=f"High Threshold = {T_high}")
-    plt.xlabel("Reconstruction Error")
-    plt.ylabel("CDF")
-    plt.xscale('log')
-    plt.title("CDF Comparison: Normal vs All Faults")
-    plt.grid(alpha=0.4)
-    plt.legend()
-    plt.savefig(os.path.join(graphs, "cdf_normal_vs_faults.png"), dpi=300)
-    plt.close()
-
 # Main 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = LSTMAutoencoder(input_size=3).to(device)
@@ -136,17 +101,19 @@ model.load_state_dict(torch.load('./data/models/autoencoder.pt', map_location=de
 model.eval()
 print("Model loaded successfully.")
 
-# Normal data
-normal_data = pd.read_csv('./data/normal/normal_combined.csv').iloc[:, 0:3].values.astype(np.float32)
-normal_errors = reconstruction_error(model, normal_data, device)
+normal_errors = get_normal_errors(model, "./data/normal", device)
+print("\nNormal Errors Stats:")
+print("Min:", normal_errors.min())
+print("Max:", normal_errors.max())
+print("Mean:", normal_errors.mean())
+print("Count:", len(normal_errors))
 
 # Problem folders
 base_path = './data/problem2/normalized_data'
-groups = ['sensor_fault', 'faults', 'combined']
+groups = ['faults', 'combined']
 
 all_results = []
 all_fault_errors = []
-
 
 for group in groups:
     group_path = os.path.join(base_path, group)
@@ -164,8 +131,6 @@ for group in groups:
                 continue
 
             errors = get_errors_from_folder(model, intensity_path, device)
-            if errors.ndim > 1:
-               errors = errors.flatten()
             if len(errors) == 0:
                 print(f"No errors found for {group}/{fault_type}/{intensity}, skipping.")
                 continue
@@ -184,6 +149,4 @@ with open(csv_file, 'w', newline='') as f:
     writer.writeheader()
     for row in all_results:
         writer.writerow(row)
-
 print(f"\nAll metrics saved to {csv_file}")
-plot_cdf(normal_errors, all_fault_errors)
