@@ -13,8 +13,8 @@ random.seed(42)
 root_dir = os.path.join("..", "data", "problems", "sensor_fault")
 metadata_file = os.path.join("..", "data", "metadata.csv")
 os.makedirs(root_dir, exist_ok=True)
-if  os.path.exists(metadata_file):
-    os.remove(metadata_file)
+if not os.path.exists(os.path.dirname(metadata_file)):
+    os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
 pd.DataFrame(columns=["sample_id","category" , "sensor",  "mode" , "intensity",  "file_path"]).to_csv(metadata_file, index=False)
 
 # save data with metadata
@@ -27,7 +27,7 @@ def save_with_metadata(df, sensor, mode,intensity ,  uid):
     row = {
         "sample_id": f"{sensor}_{mode}_{intensity}_{uid:04d}",
         "category": "sensor_fault",
-        "sensor": sensor,
+        "fault_type": f"{sensor}_noise",
         "mode": mode,
         "intensity": intensity,
         "file_path": file_path
@@ -37,11 +37,17 @@ def save_with_metadata(df, sensor, mode,intensity ,  uid):
 # Function to get the fault window based on mode
 def get_fault_window(mode):
     if mode == "start":
-        return 0, n_sample
+        start = int(random.uniform(0.1, 0.3) * n_sample)
+        fault_len = int(random.uniform(0.4, 0.6) * n_sample)
+        end = min(start + fault_len, n_sample)
+        return start, end
+
     elif mode == "recover":
         start = random.randint(n_sample // 4, n_sample // 3)
-        end = min(start + n_sample // 3, n_sample)
+        fault_len = random.randint(n_sample // 4, n_sample // 3)
+        end = min(start + fault_len, n_sample)
         return start, end
+
     else:
         raise ValueError("Invalid mode")
 
@@ -50,50 +56,28 @@ def get_fault_window(mode):
 def generate_pressure_noise(sample_id, mode="start" , intensity="high"):
     time = np.arange(n_sample)
 
-    # Scale variation
-    vib_loc = np.random.uniform(0.9, 1.1)
-    vib_scale = 0.05
-    pres_loc = np.random.uniform(48, 52)
-    pres_scale = 1.0
-    temp_loc = np.random.uniform(38, 42)
-    temp_scale = 0.5
-
     # Generate values for each sensor
-    vibration = np.random.normal(loc=vib_loc, scale=vib_scale, size=n_sample)
-    pressure = np.random.normal(loc=pres_loc, scale=pres_scale, size=n_sample)
-    temperature = np.random.normal(loc=temp_loc, scale=temp_scale, size=n_sample)
-    label = np.array(["normal"] * n_sample)
-    start , end = get_fault_window(mode)
+    vibration = np.random.normal(1.0, 0.05, n_sample)
+    pressure = np.random.normal(50.0, 1.0, n_sample)
+    temperature = np.random.normal(40.0, 0.5, n_sample)
+    label = np.array(["normal"] * n_sample, dtype=object)
+    start, end = get_fault_window(mode)
     fault_len = end - start
 
     # Intensity of noise
     if intensity == "low":
-        noise_loc = np.random.uniform(62,67)
-        noise_scale = np.random.uniform(6 , 8)
+        noise_std = 3.0
     else:
-        noise_loc = np.random.uniform(90,120)
-        noise_scale = np.random.uniform(15,20)
+        noise_std = 8.0
+
 
     # Inject noise
     if mode == "start":
-        # Gradually rise to peak noise
-        pressure[start:end] = np.linspace(pres_loc, noise_loc, fault_len) \
-                              + np.random.normal(0, noise_scale, fault_len)
+        pressure[start:end] += np.random.normal(0, noise_std, fault_len)
     elif mode == "recover":
-        # Define rise, peak, fall segments
-        rise_len = fault_len // 3
-        peak_len = fault_len // 3
-        fall_len = fault_len - rise_len - peak_len
-    
-        # Rise gradually from baseline to peak
-        pressure[start:start+rise_len] = np.linspace(pres_loc, noise_loc, rise_len) + np.random.normal(0, noise_scale*0.5, rise_len)
-    
-        # Slight fluctuation around peak (no flat hold)
-        pressure[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) +  np.random.normal(0, noise_scale, peak_len)
-    
-        # Fall gradually back to baseline
-        pressure[start+rise_len+peak_len:end] = np.linspace(noise_loc, pres_loc, fall_len) + np.random.normal(0, noise_scale*0.5, fall_len)
-
+        half = fault_len // 2
+        pressure[start:start+half] += np.random.normal(0, noise_std, half)
+        pressure[start+half:end] += np.random.normal(0, noise_std*0.3, (end - (start+half)))
     label[start:end] = "pressure_noise"
 
     # Create a DataFrame with all columns
@@ -113,54 +97,27 @@ def generate_pressure_noise(sample_id, mode="start" , intensity="high"):
 def generate_temperature_noise(sample_id, mode="start" , intensity="high"):
     time = np.arange(n_sample)
 
-    # Scale variation
-    vib_loc = np.random.uniform(0.9, 1.1)
-    vib_scale = 0.05
-    pres_loc = np.random.uniform(48, 52)
-    pres_scale = 1.0
-    temp_loc = np.random.uniform(38, 42)
-    temp_scale = 0.5
-
-
     # Generate values for each sensor
-    vibration = np.random.normal(loc=vib_loc, scale=vib_scale, size=n_sample)
-    pressure = np.random.normal(loc=pres_loc, scale=pres_scale, size=n_sample)
-    temperature = np.random.normal(loc=temp_loc, scale=temp_scale, size=n_sample)
-    label = np.array(["normal"] * n_sample)
-    start , end = get_fault_window(mode)
+    vibration = np.random.normal(1.0, 0.05, n_sample)
+    pressure = np.random.normal(50.0, 1.0, n_sample)
+    temperature = np.random.normal(40.0, 0.5, n_sample)
+    label = np.array(["normal"] * n_sample, dtype=object)
+    start, end = get_fault_window(mode)
     fault_len = end - start
 
      # Intensity of noise
     if intensity == "low":
-        noise_loc = np.random.uniform(50,55)
-        noise_scale = np.random.uniform(4,6)
+        noise_std = 2.0
     else:
-        noise_loc = np.random.uniform(70,90)
-        noise_scale = np.random.uniform(11,15)
+        noise_std = 6.0
 
     # Inject noise 
     if mode == "start":
-        # Gradually rise to peak noise
-        temperature[start:end] = np.linspace(temp_loc, noise_loc, fault_len) \
-                              + np.random.normal(0, noise_scale, fault_len)
+        temperature[start:end] += np.random.normal(0, noise_std, fault_len)
     elif mode == "recover":
-        # Define rise, peak, fall segments
-        rise_len = fault_len // 3
-        peak_len = fault_len // 3
-        fall_len = fault_len - rise_len - peak_len
-    
-        # Rise gradually from baseline to peak
-        temperature[start:start+rise_len] = np.linspace(temp_loc, noise_loc, rise_len) + \
-                                     np.random.normal(0, noise_scale*0.5, rise_len)
-    
-        # Slight fluctuation around peak (no flat hold)
-        temperature[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) + \
-                                                       np.random.normal(0, noise_scale, peak_len)
-    
-        # Fall gradually back to baseline
-        temperature[start+rise_len+peak_len:end] = np.linspace(noise_loc, temp_loc, fall_len) + \
-                                            np.random.normal(0, noise_scale*0.5, fall_len)
-
+        half = fault_len // 2
+        temperature[start:start+half] += np.random.normal(0, noise_std, half)
+        temperature[start+half:end] += np.random.normal(0, noise_std*0.3, (end - (start+half)))
     label[start:end] = "temperature_noise"
 
     # Create a DataFrame with all columns
@@ -179,54 +136,28 @@ def generate_temperature_noise(sample_id, mode="start" , intensity="high"):
 # Vibration Noise Fault
 def generate_vibration_noise(sample_id, mode="start" , intensity="high"):
     time = np.arange(n_sample)
-
-    # Scale variation
-    vib_loc = np.random.uniform(0.9, 1.1)
-    vib_scale = 0.05
-    pres_loc = np.random.uniform(48, 52)
-    pres_scale = 1.0
-    temp_loc = np.random.uniform(38, 42)
-    temp_scale = 0.5
     
     # Generate  values for each sensor
-    vibration = np.random.normal(loc=vib_loc, scale=vib_scale, size=n_sample)
-    pressure = np.random.normal(loc=pres_loc, scale=pres_scale, size=n_sample)
-    temperature = np.random.normal(loc=temp_loc, scale=temp_scale, size=n_sample)
-    label = np.array(["normal"] * n_sample)
-    start , end = get_fault_window(mode)
+    vibration = np.random.normal(1.0, 0.05, n_sample)
+    pressure = np.random.normal(50.0, 1.0, n_sample)
+    temperature = np.random.normal(40.0, 0.5, n_sample)
+    label = np.array(["normal"] * n_sample, dtype=object)
+    start, end = get_fault_window(mode)
     fault_len = end - start
 
     # Intensity of noise
     if intensity == "low":
-        noise_loc = np.random.uniform(1,2)
-        noise_scale = 0.5
+        noise_std = 0.3
     else:
-        noise_loc = np.random.uniform(3,7)
-        noise_scale = np.random.uniform(1,3)
+        noise_std = 0.8
 
     # Inject noise
     if mode == "start":
-        # Gradually rise to peak noise
-        vibration[start:end] = np.linspace(vib_loc, noise_loc, fault_len) \
-                              + np.random.normal(0, noise_scale, fault_len)
+        vibration[start:end] += np.random.normal(0, noise_std, fault_len)
     elif mode == "recover":
-        # Define rise, peak, fall segments
-        rise_len = fault_len // 3
-        peak_len = fault_len // 3
-        fall_len = fault_len - rise_len - peak_len
-
-        # Rise gradually from baseline to peak
-        vibration[start:start+rise_len] = np.linspace(vib_loc, noise_loc, rise_len) + \
-                                     np.random.normal(0, noise_scale*0.5, rise_len)  
-        
-        # Slight fluctuation around peak (no flat hold)
-        vibration[start+rise_len:start+rise_len+peak_len] = np.linspace(noise_loc*0.9, noise_loc, peak_len) + \
-                                                       np.random.normal(0, noise_scale, peak_len)   
-         
-        # Fall gradually back to baseline
-        vibration[start+rise_len+peak_len:end] = np.linspace(noise_loc, vib_loc, fall_len) + \
-                                            np.random.normal(0, noise_scale*0.5, fall_len)
-        
+        half = fault_len // 2
+        vibration[start:start+half] += np.random.normal(0, noise_std, half)
+        vibration[start+half:end] += np.random.normal(0, noise_std*0.3, (end - (start+half)))
     label[start:end] = "vibration_noise"
 
     # Create a DataFrame with all columns

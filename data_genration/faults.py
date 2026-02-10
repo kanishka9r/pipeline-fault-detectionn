@@ -13,8 +13,8 @@ random.seed(42)
 root_dir = os.path.join("..", "data", "problems", "faults")
 metadata_file = os.path.join("..", "data", "metadata.csv")
 os.makedirs(root_dir, exist_ok=True)
-if  os.path.exists(metadata_file):
-    os.remove(metadata_file)
+if not os.path.exists(os.path.dirname(metadata_file)):
+    os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
 pd.DataFrame(columns=["sample_id","category" , "fault_type", "mode", "intensity" ,"file_path"]).to_csv(metadata_file, index=False)
 
 # save data with metadata
@@ -37,20 +37,27 @@ def save_with_metadata(df, fault_type,  mode, intensity , uid):
 # function to get the fault window based on mode
 def get_fault_window(mode):
     if mode == "start":
-        return 0, n_sample
+        start = int(random.uniform(0.1, 0.25) * n_sample)
+        fault_len = int(random.uniform(0.4, 0.6) * n_sample)
+        end = min(start + fault_len, n_sample)
+        return start, end
+
     elif mode == "recover":
         start = random.randint(n_sample // 4, n_sample // 3)
-        end = min(start + n_sample // 3, n_sample)
+        fault_len = random.randint(n_sample // 4, n_sample // 3)
+        end = min(start + fault_len, n_sample)
         return start, end
+
     else:
         raise ValueError("Invalid mode")
+
     
 def generate_baseline():
     return (
         np.random.normal(loc=np.random.uniform(4, 6), scale=1.0, size=n_sample),  # vibration
         np.random.normal(loc=np.random.uniform(48, 52), scale=2.0, size=n_sample),     # pressure
         np.random.normal(loc=np.random.uniform(38, 42), scale=1.0, size=n_sample),     # temperature
-        np.array(["normal"]*n_sample)  # label
+        np.array(["normal"]*n_sample , dtype=object)  # label
     )   
         
 # Leak Fault
@@ -81,7 +88,7 @@ def generate_leak_fault(sample_id, mode="start", intensity="high"):
 
     elif mode == "recover":
        up_len = int(fault_len * 0.4)
-       down_len = fault_len - up_len
+       down_len = fault_end - (fault_start + up_len)
 
     # 1. Ramp up (baseline → peak)
        pressure[fault_start:fault_start+up_len] -= np.linspace(0, max_pressure_drop, up_len) + pressure_jitter[:up_len]
@@ -134,7 +141,7 @@ def generate_blockage_fault(sample_id, mode="start", intensity="high"):
 
     elif mode == "recover":
         up_len = int(fault_len * 0.4)
-        down_len = fault_len - up_len
+        down_len = fault_end - (fault_start + up_len)
 
         pressure[fault_start:fault_start+up_len] += np.linspace(0, max_pressure_spike, up_len) + pressure_jitter[:up_len]
         vibration[fault_start:fault_start+up_len] += np.linspace(0, max_vibration_spike, up_len) + vibration_jitter[:up_len]
@@ -186,7 +193,7 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
 
     elif mode == "recover":
         up_len = int(fault_len * 0.4)
-        down_len = fault_len - up_len
+        down_len = fault_end - (fault_start + up_len)
 
         temperature[fault_start:fault_start+up_len] += np.linspace(0, max_temp_rise, up_len) + temp_jitter[:up_len]
         pressure[fault_start:fault_start+up_len] -= np.linspace(0, max_pressure_drop, up_len) + pressure_jitter[:up_len]
