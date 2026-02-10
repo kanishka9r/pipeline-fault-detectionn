@@ -26,9 +26,8 @@ class LSTMAutoencoder(nn.Module):
         self.output_layer = nn.Linear(hidden_size, input_size)
 
     def forward(self, x):
-        enc_out, _ = self.encoder_lstm(x)
-        pooled = torch.mean(enc_out, dim=1)      
-        z = self.bottleneck(pooled)
+        enc_out, (hidden, _) = self.encoder_lstm(x)
+        z = self.bottleneck(hidden[-1]) 
         z = z.unsqueeze(1).repeat(1, x.size(1), 1)
         dec_in = self.decoder_input(z)
         dec_out, _ = self.decoder_lstm(dec_in)
@@ -40,7 +39,7 @@ def reconstruction_error(model, data, device):
     with torch.no_grad():
         out = model(x)
         seq_error = torch.mean((out - x) ** 2).item()
-    return np.array([seq_error])
+    return seq_error
 
 def get_normal_errors(model, normal_base, device):
     errors = []
@@ -48,11 +47,12 @@ def get_normal_errors(model, normal_base, device):
         folder = os.path.join(normal_base, sub)
         for f in os.listdir(folder):
             if f.endswith(".csv"):
-                raw = pd.read_csv(os.path.join(folder, f)).iloc[:, 1:4].values
+                df = pd.read_csv(os.path.join(folder, f))
+                raw = df[['vibration', 'pressure', 'temperature']].values
                 if raw.shape[0] == 600:
-                    data = scaler.transform(raw)
+                    data = scaler.transform(raw) # Normal data is raw, so we scale it
                     err = reconstruction_error(model, data, device)
-                    errors.append(err.item())
+                    errors.append(err)
     return np.array(errors)
 
 def get_errors_from_folder(model, folder, device):
@@ -60,10 +60,11 @@ def get_errors_from_folder(model, folder, device):
     for root, _, files in os.walk(folder):
         for f in files:
             if f.endswith(".csv"):
-                data = pd.read_csv(os.path.join(root, f)).iloc[:, 1:4].values
+                df = pd.read_csv(os.path.join(root, f))
+                data = df[['vibration', 'pressure', 'temperature']].values
                 if data.shape[0] == 600:
                     err = reconstruction_error(model, data, device)
-                    errors.append(err.item())
+                    errors.append(err) 
     return np.array(errors)
 
 #  Metrics + histogram 
@@ -97,56 +98,36 @@ def metrics_and_plot(normal_errors, problem_errors, case_type, case_name):
 # Main 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = LSTMAutoencoder(input_size=3).to(device)
-model.load_state_dict(torch.load('./data/models/autoencoder.pt', map_location=device))
+model.load_state_dict(torch.load('data/models/autoencoder.pt', map_location=device))
 model.eval()
 print("Model loaded successfully.")
 
-normal_errors = get_normal_errors(model, "./data/normal", device)
-print("\nNormal Errors Stats:")
-print("Min:", normal_errors.min())
-print("Max:", normal_errors.max())
-print("Mean:", normal_errors.mean())
-print("Count:", len(normal_errors))
+normal_errors = get_normal_errors(model, "data/normal", device)
 
 # Problem folders
-base_path = './data/problem2/normalized_data'
-groups = ['faults', 'combined']
+base_path = 'data/problem2/normalized_data'
+groups = ['faults', 'combined' , 'sensor_fault']
 
 all_results = []
-all_fault_errors = []
-
 for group in groups:
     group_path = os.path.join(base_path, group)
     if not os.path.exists(group_path):
         continue
-
     for fault_type in os.listdir(group_path):
         fault_path = os.path.join(group_path, fault_type)
         if not os.path.isdir(fault_path):
             continue
-
         for intensity in os.listdir(fault_path):  
             intensity_path = os.path.join(fault_path, intensity)
             if not os.path.isdir(intensity_path):
                 continue
-
             errors = get_errors_from_folder(model, intensity_path, device)
-            if len(errors) == 0:
-                print(f"No errors found for {group}/{fault_type}/{intensity}, skipping.")
-                continue
-        
-            case_name = f"{fault_type}_{intensity}"
-            result = metrics_and_plot(normal_errors, errors, group , case_name)
-            all_fault_errors.extend(errors.tolist())
-            if result:
-                all_results.append(result)  
+            if len(errors) > 0:
+                    result = metrics_and_plot(normal_errors, errors, group, f"{fault_type}_{intensity}")
+                    if result: all_results.append(result) 
 
 
 # Save CSV
-csv_file = 'reconstruction_metrics.csv'
-with open(csv_file, 'w', newline='') as f:
-    writer = csv.DictWriter(f, fieldnames=all_results[0].keys())
-    writer.writeheader()
-    for row in all_results:
-        writer.writerow(row)
-print(f"\nAll metrics saved to {csv_file}")
+if all_results:
+        pd.DataFrame(all_results).to_csv('reconstruction_metrics.csv', index=False)
+        print("Metrics saved successfully.")

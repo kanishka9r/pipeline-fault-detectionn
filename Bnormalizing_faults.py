@@ -8,7 +8,8 @@ count = 0
 # set input and output directories
 input_base = 'data/problems'
 output_base = 'data/problem2/normalized_data'
-scaler = joblib.load("data/scalers/minmax_scaler.pkl")
+scaler_path = "data/scalers/minmax_scaler.pkl"
+scaler = joblib.load(scaler_path)
 
 # loop through all CSV files in the input directory
 for root, dirs, files in os.walk(input_base):
@@ -24,7 +25,7 @@ for root, dirs, files in os.walk(input_base):
             # Replace with normalized values
             df[['vibration', 'pressure', 'temperature']] = normalized
             # Ensure output directory exists
-            Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
             # Save to processed folder
             df.to_csv(output_path, index=False)
             count = count + 1 

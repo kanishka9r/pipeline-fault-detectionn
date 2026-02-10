@@ -13,24 +13,29 @@ def load_normal_sequences(path, seq_len=600):
     sequences = []
     for subfolder in ["normal_1", "normal_2"]:
         folder = os.path.join(path, subfolder)
-        for file in os.listdir(folder):
+        if not os.path.exists(folder): continue 
+        for file in sorted(os.listdir(folder)): 
             if file.endswith(".csv"):
                 df = pd.read_csv(os.path.join(folder, file))
-                seq = df.iloc[:, 1:4].values
+                seq = df[['vibration', 'pressure', 'temperature']].values
                 if seq.shape[0] == seq_len:
                     sequences.append(seq)
     return np.array(sequences)
 
 # Per-sequence normalization
-def normalize_sequences(seqs):
-    N, T, C = seqs.shape
-    flat = seqs.reshape(-1, C)        # (N*600,3)
+def normalize_sequences(train_seqs, val_seqs):
+    # Train data shape: (N, T, C)
+    N, T, C = train_seqs.shape
+    flat_train = train_seqs.reshape(-1, C)
     scaler = MinMaxScaler()
-    flat_norm = scaler.fit_transform(flat)
-    os.makedirs("data/scalers", exist_ok=True)
+    flat_train_norm = scaler.fit_transform(flat_train)
+    os.makedirs("data/scalers", exist_ok=True) 
     joblib.dump(scaler, "data/scalers/minmax_scaler.pkl")
-    norm_seqs = flat_norm.reshape(N, T, C)
-    return norm_seqs
+    train_norm = flat_train_norm.reshape(train_seqs.shape)
+    flat_val = val_seqs.reshape(-1, C)
+    flat_val_norm = scaler.transform(flat_val)
+    val_norm = flat_val_norm.reshape(val_seqs.shape)
+    return train_norm, val_norm
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -48,23 +53,24 @@ class LSTMAutoencoder(nn.Module):
 
     def forward(self, x):
         # Encode
-        enc_out, _ = self.encoder_lstm(x)
-        pooled = torch.mean(enc_out, dim=1)          
-        z = self.bottleneck(pooled)
+        _, (hidden, _) = self.encoder_lstm(x) 
+        z = self.bottleneck(hidden[-1]) 
+        
+        # Repeat vector for sequence reconstruction
         z = z.unsqueeze(1).repeat(1, x.size(1), 1)
         dec_in = self.decoder_input(z)
         dec_out, _ = self.decoder_lstm(dec_in)
-        return self.output_layer(dec_out)    
-
+        return self.output_layer(dec_out)
+    
 loss_history=[]
 # Train the autoencoder on the normal data
 def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
-    dataset = TensorDataset(torch.tensor(data, dtype=torch.float32))
+    dataset = TensorDataset(torch.from_numpy(data).float())
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss(reduction="mean")
-    
+    loss_history.clear()
     model.train()
     for epoch in range(epochs):
         total_loss = 0
@@ -83,11 +89,14 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
 # Compute reconstruction error on normal data
 def compute_sequence_error(model, data_seq):
     model.eval()
+    errors = []
     with torch.no_grad():
-        x = torch.tensor(data_seq, dtype=torch.float32).to(device)
-        out = model(x)
-        seq_errors = torch.mean((out - x) ** 2, dim=(1,2))  # (num_seq,)
-    return seq_errors.cpu().numpy()
+        # Processing in batches to be safe
+        x_tensor = torch.from_numpy(data_seq).float().to(device)
+        output = model(x_tensor)
+        mse = torch.mean((output - x_tensor)**2, dim=(1, 2))
+        errors.append(mse.cpu().numpy())
+    return np.concatenate(errors)
 
 
 # Determine threshold for anomaly detection
@@ -103,15 +112,14 @@ def determine_threshold(errors, method='percentile', value=97):
 if __name__ == "__main__":
 
     # Load and normalize normal data
-    data_seq = load_normal_sequences("data/normal")
-    data_seq = normalize_sequences(data_seq)
-
-    # Reshape into sequences of 600 (10 min segments at 1Hz)
-    split_idx = int(0.8 * len(data_seq))  # 80% train, 20% val
+    data_seq = load_normal_sequences("data/normal") 
+    np.random.shuffle(data_seq)
+    split_idx = int(0.8 * len(data_seq))
     train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
+    train_data, val_data = normalize_sequences(train_data, val_data)
     # Initialize and train autoencoder
     model = LSTMAutoencoder()
-    train_autoencoder(model, train_data, epochs=50)
+    train_autoencoder(model, train_data, epochs=50 , lr=1e-3)
 
     plt.figure(figsize=(10,5))
     plt.plot(loss_history, label="Training Loss", color='blue')
@@ -127,17 +135,12 @@ if __name__ == "__main__":
     torch.save(model.state_dict(), "data/models/autoencoder.pt")
   
     # Compute reconstruction error on normal data
-    errors = compute_sequence_error(model, val_data)
-
-    # Set threshold
-    threshold = np.percentile(errors, 97)
-    print("Min seq error:", errors.min())
-    print("Max seq error:", errors.max())
-    print("Mean seq error:", errors.mean())
-    print("97th percentile:", threshold)
-
+    train_errors = compute_sequence_error(model, train_data)
+    threshold = determine_threshold(train_errors, method='percentile', value=97)
     # Evaluate false positives on normal validation set
-    num_fp = np.sum(errors > threshold)
-    total = len(errors)
+    val_errors = compute_sequence_error(model, val_data)
+    num_fp = np.sum(val_errors > threshold)
+    total = len(val_errors)
+    print(f"Calculated Threshold: {threshold:.6f}")
     print(f"False Positives: {num_fp}/{total} ({100*num_fp/total:.2f}%)")
     print(f"Accuracy on Normal Data: {100*(1-num_fp/total):.2f}%")
