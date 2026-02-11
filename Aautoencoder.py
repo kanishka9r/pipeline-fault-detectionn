@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # Load normal CSVs as sequences
 def load_normal_sequences(path, seq_len=600):
     sequences = []
-    for subfolder in ["normal_1", "normal_2"]:
+    for subfolder in ["normal1", "normal2"]:
         folder = os.path.join(path, subfolder)
         if not os.path.exists(folder): continue 
         for file in sorted(os.listdir(folder)): 
