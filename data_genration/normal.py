@@ -59,7 +59,7 @@ def generate_normal_1(uid):
         "label": np.array(["normal"]*n_samples, dtype=object)
     })
 
-    save_normal_with_metadata(df, uid, "normal_1")
+    save_normal_with_metadata(df, uid, "normal1")
 
 # Normal type 2
 def generate_normal_2(uid):
@@ -78,7 +78,7 @@ def generate_normal_2(uid):
         "label": np.array(["normal"]*n_samples, dtype=object)
     })
 
-    save_normal_with_metadata(df, uid, "normal_2")
+    save_normal_with_metadata(df, uid, "normal2")
 
 # Generate all normal data
 def generate_normal_data(n_files=675):

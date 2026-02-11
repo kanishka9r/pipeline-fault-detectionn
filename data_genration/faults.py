@@ -189,7 +189,7 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
         # Ramp up continuously till end
         temperature[fault_start:fault_end] += np.linspace(0, max_temp_rise, fault_len) + temp_jitter
         pressure[fault_start:fault_end] -= np.linspace(0, max_pressure_drop, fault_len) + pressure_jitter
-        label[fault_start:fault_end] = "temperature_fault"
+        label[fault_start:fault_end] = "temperaturefault"
 
     elif mode == "recover":
         up_len = int(fault_len * 0.4)
@@ -201,7 +201,7 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
         temperature[fault_start+up_len:fault_end] += np.linspace(max_temp_rise, 0, down_len) + temp_jitter[up_len:]
         pressure[fault_start+up_len:fault_end] -= np.linspace(max_pressure_drop, 0, down_len) + pressure_jitter[up_len:]
 
-        label[fault_start:fault_end] = "temperature_fault"
+        label[fault_start:fault_end] = "temperaturefault"
     # DataFrame
     df = pd.DataFrame({
         "time": time,
@@ -212,7 +212,7 @@ def generate_temperature_fault(sample_id, mode="start", intensity="high"):
     })
 
     # Save
-    save_with_metadata(df, "temperature_fault", mode, intensity, sample_id)
+    save_with_metadata(df, "temperaturefault", mode, intensity, sample_id)
 
 
     # Run All Generators
