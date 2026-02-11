@@ -43,7 +43,7 @@ def reconstruction_error(model, data, device):
 
 def get_normal_errors(model, normal_base, device):
     errors = []
-    for sub in ["normal_1", "normal_2"]:
+    for sub in ["normal1", "normal2"]:
         folder = os.path.join(normal_base, sub)
         for f in os.listdir(folder):
             if f.endswith(".csv"):
@@ -106,7 +106,7 @@ normal_errors = get_normal_errors(model, "data/normal", device)
 
 # Problem folders
 base_path = 'data/problem2/normalized_data'
-groups = ['faults', 'combined' , 'sensor_fault']
+groups = ['faults', 'combined' , 'sensor']
 
 all_results = []
 for group in groups:
