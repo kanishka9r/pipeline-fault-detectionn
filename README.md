@@ -31,7 +31,6 @@ The raw time-series data undergoes a rigorous transformation pipeline before rea
 2) Envelope Analysis: The Hilbert Transform is applied to isolate the fault-related impulses from the carrier signal.
 3) Spectral Conversion: FFT converts the envelope into the frequency domain, where fault frequencies are most prominent.
 4) Log-Scaling: Normalizes the dynamic range of the spectral peaks for stable neural network training.
-- **Purpose:** Extract optimized features for model.
 
 ### Stage 2: Anomaly Detection (CNN-Autoencoder)
 
