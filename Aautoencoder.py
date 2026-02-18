@@ -122,6 +122,7 @@ if __name__ == "__main__":
     val_errors = compute_sequence_error(model, val_data)
     val_errors = np.log1p(val_errors)
     threshold_unsup = np.percentile(val_errors, 95)
+
     # ===== EVALUATE ON FULL DATASET =====
     X_fft = np.array([to_fft(w) for w in X])
     X_norm = (X_fft - mean) / std
@@ -136,7 +137,6 @@ if __name__ == "__main__":
     threshold = thresholds[best_idx]
     print("ROC Threshold:", threshold)
     print("Unsupervised Threshold:", threshold_unsup)
-
 
     pred_anomaly = (all_errors > threshold).astype(int)
     true_anomaly = (y != 0).astype(int)
