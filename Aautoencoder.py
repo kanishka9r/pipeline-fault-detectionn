@@ -4,7 +4,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import roc_auc_score , roc_curve
 from paderborn_loader import load_dataset_with_files, to_fft
-from scipy.stats import ks_2samp
 import matplotlib.pyplot as plt
 
 # Set device
@@ -54,14 +53,16 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
     loss_history.clear()
     model.train()
     for epoch in range(epochs):
         total_loss = 0
         for batch in dataloader:
             x = batch[0].to(device)
-            output = model(x)
+            noise = torch.randn_like(x) * 0.01
+            noisy_x = x + noise
+            output = model(noisy_x)
             loss = criterion(output, x)
             optimizer.zero_grad()
             loss.backward()
@@ -81,8 +82,8 @@ def compute_sequence_error(model, data_seq, batch_size=128):
         for batch in dataloader:
             x = batch[0].to(device)
             output = model(x)
-            mae = torch.mean(torch.abs(output - x), dim=(1,2))
-            errors.append(mae.cpu().numpy())
+            mse = torch.mean((output - x) ** 2, dim=(1,2))
+            errors.append(mse.cpu().numpy())
     return np.concatenate(errors)
 
 # main process
@@ -119,11 +120,13 @@ if __name__ == "__main__":
     model = CNNAutoencoder()
     train_autoencoder(model, train_data, epochs=50, lr=1e-3)
     val_errors = compute_sequence_error(model, val_data)
+    val_errors = np.log1p(val_errors)
     threshold_unsup = np.percentile(val_errors, 95)
     # ===== EVALUATE ON FULL DATASET =====
     X_fft = np.array([to_fft(w) for w in X])
     X_norm = (X_fft - mean) / std
     all_errors = compute_sequence_error(model, X_norm)
+    all_errors = np.log1p(all_errors)
     true_anomaly = (y != 0).astype(int)
 
     # ===== ROC-based threshold selection =====
@@ -147,10 +150,7 @@ if __name__ == "__main__":
     auc = roc_auc_score(true_anomaly, all_errors)
     healthy_errors = all_errors[y == 0]
     fault_errors   = all_errors[y != 0]
-    ks_stat, p_value = ks_2samp(healthy_errors, fault_errors)
 
-    print("KS Statistic:", ks_stat)
-    print("KS p-value:", p_value)
     print("TP:", tp)
     print("FP:", fp)
     print("FN:", fn)
@@ -162,8 +162,6 @@ if __name__ == "__main__":
     print("Mean Fault Error:", fault_errors.mean())
     print("Error Ratio (Fault/Healthy):", fault_errors.mean() / healthy_errors.mean())
 
-
-     
     plt.hist(healthy_errors, bins=50, alpha=0.6, label="Healthy")
     plt.hist(fault_errors, bins=50, alpha=0.6, label="Fault")
     plt.axvline(threshold, color='r', linestyle='--', label="Threshold")
