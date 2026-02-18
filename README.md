@@ -1,39 +1,52 @@
-# Industrial Pipeline Fault Detection Using LSTM  Autoencoder and CNN-LSTM Hybrid Model
+# Bearing Fault Detection using CNN Autoencoder + CNN Classifier
 
-
-This project implements a multi-stage machine learning system for detecting and classifying in a simulated industrial pipeline. The system operates on time-series sensor data from vibration, pressure, and temperature sensors.
+This project implements a robust pipeline for industrial bearing health monitoring. It utilizes the Paderborn University Bearing Dataset to perform both unsupervised Anomaly Detection (detecting if a fault exists) and supervised Fault Classification (identifying the specific type and severity of the fault). It is designed to provide automated predictive maintenance. By analyzing vibration signals, it reduces downtime by identifying early-stage degradation and providing precise diagnostics of the failure mode.
 
 ## Features
 
-- **Anomalous Behavior Detection:** Utilizes an unsupervised learning approach to identify deviations from normal operating conditions.  
-- **Fault Classification:** Classifies detected anomalies into specific fault types, such as leaks, blockages, or sensor failures.    
-- **Comprehensive Fault Coverage:** Trained on a diverse synthetic dataset that includes single, combined, and sensor-specific faults.  
+- **Dual-Stage Analytics:** Combines an Autoencoder for novelty detection and a CNN for multi-class classification.
+- **Robust Signal Processing:** Implements Hilbert Transform for envelope extraction and Fast Fourier Transform (FFT) for spectral analysis.
+- **Leakage-Free Validation:** Strict file-level data splitting ensures the model generalizes to new, unseen machinery.
+- **Automated Labeling:** Dynamic mapping of complex MATLAB folder structures into human-readable fault categories.
+
 
 ## Dataset Used
 
-The system is trained and evaluated on a synthetically generated dataset to simulate a wide range of pipeline conditions, including:
+The system is optimized for the Paderborn University (PU) Dataset:
 
-- **Normal Data:** Stable and fluctuating operational data to establish a baseline.  
-- **Process Faults:** Simulated events like leaks (pressure drop, vibration rise) and blockages (pressure spike), created with varying intensity (low, high) .  
-- **Sensor Faults:** Simulated sensor malfunctions, including low/high-noise faults.  
-- **Combined Faults:** Complex scenarios where multiple faults occur simultaneously.  
+- **Healthy State:** Baseline operating conditions.
+- **Artificial & Real Damage:** Includes Outer Race and Inner Race damages. 
+- **Severity Levels:** Categorized into Low and High severity based on the damage extent.
+- **Format:** High-frequency vibration data stored in .mat (MATLAB) files.
 
 ## Model Architecture
 
 The project uses a two-stage machine learning pipeline:
 
-### Stage 1: Unsupervised Anomaly Detection
-- An **LSTM Autoencoder** is trained exclusively on normal pipeline data.  
-- The model learns to reconstruct normal time-series patterns.  
-- During inference, a high reconstruction error on a new data point indicates an anomaly.  
-- **Purpose:** Identify when a fault occurs.
+### Stage 1:  Data Engineering & Preprocessing
 
-### Stage 2: Supervised Fault Classification & Intensity Estimation
-- A **CNN-LSTM Multi-Task Learning model** is trained on extracted segments of anomalous data from Stage 1.  
-- **1D CNN:** Extracts local, spatial features from the time-series segments.  
-- **Bi-directional LSTM:** Processes these features to learn temporal dependencies.  
-- **Output Heads:**  
-  - **Classification Head:** Predicts the specific fault type and intensity(low or high)
+The raw time-series data undergoes a rigorous transformation pipeline before reaching the models:
+
+1) Segmentation: Continuous streams are partitioned into discrete windows of 2048 samples.
+2) Envelope Analysis: The Hilbert Transform is applied to isolate the fault-related impulses from the carrier signal.
+3) Spectral Conversion: FFT converts the envelope into the frequency domain, where fault frequencies are most prominent.
+4) Log-Scaling: Normalizes the dynamic range of the spectral peaks for stable neural network training.
+- **Purpose:** Extract optimized features for model.
+
+### Stage 2: Anomaly Detection (CNN-Autoencoder)
+
+An unsupervised Convolutional Autoencoder serves as the first line of defense:
+
+1) Training: Learned exclusively on "Healthy" data.
+2) Detection Mechanism: The model attempts to reconstruct the input. When a faulty signal is encountered, the Reconstruction Error (MSE) spikes, triggering an anomaly alert.
+3) Thresholding: Uses ROC-curve optimization to define the boundary between normal and abnormal states.
+
+### Stage 2: Fault Classification (Deep 1D-CNN)
+Once an anomaly is detected, a Supervised 1D-CNN classifies the failure:
+
+1) Architecture: 4-layer Deep Convolutional Network with Batch Normalization and Dropout (0.4) for regularization.
+2) Categories: Classified into 5 states (Healthy, Outer_Low, Outer_High, Inner_Low, Inner_High).
+3) Optimization: Utilizes a ReduceLROnPlateau scheduler and balanced class weights to handle dataset imbalances.
 
 ## Tech Stack
 
@@ -43,6 +56,7 @@ The project uses a two-stage machine learning pipeline:
 - **Pandas**: Dataset handling and processing  
 - **scikit-learn**: Data splitting, normalization, and evaluation metrics  
 - **Matplotlib & Seaborn**: Data visualization and plotting  
+- **H5py**: for MATLAB compatiblility
 
 ## How to Run
 
@@ -52,24 +66,32 @@ The project uses a two-stage machine learning pipeline:
 2. Install dependencies:  
    ```bash  
    pip install -r requirements.txt
-3. Generate the dataset  
-Run the data generation scripts to create the synthetic data.  
-4. Train the autoencoder
-Run the script to train the LSTM Autoencoder on normal data.
-5. Normalize the dataset  
-Run the script to normalize the dataset on 0-1 scale.
-6. Extract anomaly segments  
-Use the autoencoder to find and extract anomalous segments from the fault data.  
-7. Train the multi-task model
-Run the script to train the CNN-LSTM model on the extracted anomaly segments.
+3. Data Preparation
+Ensure your dataset is organized in the following directory structure:
+    ```bash
+   data_generation/pipelinedataset/[Folder_Names]/[Files].mat
+4. Training the Pipeline
+-  **Run Preprocessing & Anomaly Detection:**
+Execute the Autoencoder script to establish the healthy baseline and detection threshold.
+- **Run Fault Classification:**
+Execute the CNN Classifier script to train the diagnostic model. The best weights will be saved to:
+data_generation/model/best_paderborn_cnn.pt
+
+## Evaluation and metrics
+
+The system outputs comprehensive performance reports:
+
+- **Confusion Matrix:** To visualize classification accuracy across all fault types.
+- **ROC-AUC:** To measure the reliability of the anomaly detection stage.
+- **Error Distribution:** Histograms comparing healthy vs. faulty reconstruction errors.
 
 ## Future Enhancements
 
-- **Real-Time Monitoring:** Implement a system to process incoming data streams in real time.  
-- **Hyperparameter Tuning:** Use automated tools to optimize model hyperparameters for better performance.  
-- **Intensity Calculation.** Can use to check intensity of the fault on scale of (0-1).
-- **Real-World Data Validation:** Test the model on real-world pipeline data to validate its robustness.  
+- **Cross-operating condition generalization:** Evaluate anomaly detection performance when trained on one operating condition and tested on unseen operating conditions
+- **Real-Time Monitoring:** Develop a dashboard to process live vibration data from sensors, allowing maintenance teams to see the health of the machinery in real-time rather than processing static files. 
+- **Multi-Sensor Integration:** Incorporate data from other sensors, such as Temperature and Acoustic Emission, to improve the accuracy of the fault detection system and reduce false alarms. 
+- **Remaining Useful Life (RUL) Prediction** Extend the model’s capabilities to not only detect faults but also estimate how many days or hours the bearing can safely operate before it completely fails.  
   
 ## License
-This project is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+This project is licensed under the MIT License.
 See the [LICENSE](LICENSE) file for details.

@@ -28,11 +28,7 @@ torch.manual_seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
-
-# ===============================
 # Train / Validation split (stratified)
-# ===============================
-
 X, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset", window_size=2048) 
 print("Total windows:", len(X)) # Convert to FFT (recommended for bearings) 
 X = np.array([to_fft(w) for w in X])
