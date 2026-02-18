@@ -1,12 +1,6 @@
-# Ignore specific file
-extra.docx
-synopsis.docx
-countfaults.py
-
 # Ignore temporary files
-data/
-__pycache__/
-*.pyc
-reconstruction_metrics.csv
+data_genration
+__pycache__
+
 
 

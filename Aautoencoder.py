@@ -1,66 +1,51 @@
-import os
-import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-import joblib
+from sklearn.metrics import roc_auc_score , roc_curve
+from paderborn_loader import load_dataset_with_files, to_fft
+from scipy.stats import ks_2samp
 import matplotlib.pyplot as plt
-
-# Load normal CSVs as sequences
-def load_normal_sequences(path, seq_len=600):
-    sequences = []
-    for subfolder in ["normal1", "normal2"]:
-        folder = os.path.join(path, subfolder)
-        if not os.path.exists(folder): continue 
-        for file in sorted(os.listdir(folder)): 
-            if file.endswith(".csv"):
-                df = pd.read_csv(os.path.join(folder, file))
-                seq = df[['vibration', 'pressure', 'temperature']].values
-                if seq.shape[0] == seq_len:
-                    sequences.append(seq)
-    return np.array(sequences)
-
-# Per-sequence normalization
-def normalize_sequences(train_seqs, val_seqs):
-    # Train data shape: (N, T, C)
-    N, T, C = train_seqs.shape
-    flat_train = train_seqs.reshape(-1, C)
-    scaler = MinMaxScaler()
-    flat_train_norm = scaler.fit_transform(flat_train)
-    os.makedirs("data/scalers", exist_ok=True) 
-    joblib.dump(scaler, "data/scalers/minmax_scaler.pkl")
-    train_norm = flat_train_norm.reshape(train_seqs.shape)
-    flat_val = val_seqs.reshape(-1, C)
-    flat_val_norm = scaler.transform(flat_val)
-    val_norm = flat_val_norm.reshape(val_seqs.shape)
-    return train_norm, val_norm
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-# Define LSTM Autoencoder
-class LSTMAutoencoder(nn.Module):
-    def __init__(self, input_size=3, hidden_size=64, latent_size=32):
+# Define CNN Autoencoder
+class CNNAutoencoder(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.encoder_lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.bottleneck = nn.Linear(hidden_size, latent_size)
-        self.decoder_input = nn.Linear(latent_size, hidden_size)
-        self.decoder_lstm = nn.LSTM(hidden_size, hidden_size, batch_first=True)
-        self.output_layer = nn.Linear(hidden_size, input_size)
+        self.encoder = nn.Sequential(
+            nn.Conv1d(2, 32, kernel_size=7, stride=2, padding=3), 
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+
+            nn.Conv1d(32, 64, kernel_size=5, stride=2, padding=2), 
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+
+            nn.Flatten(),
+            nn.Linear(64 * 256, 128), 
+            nn.ReLU()
+        )
+
+        self.decoder_input = nn.Linear(128, 64 * 256)
+
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose1d(64, 32, kernel_size=2, stride=2),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.ConvTranspose1d(32, 2, kernel_size=2, stride=2),
+        )
 
     def forward(self, x):
-        # Encode
-        _, (hidden, _) = self.encoder_lstm(x) 
-        z = self.bottleneck(hidden[-1]) 
-        
-        # Repeat vector for sequence reconstruction
-        z = z.unsqueeze(1).repeat(1, x.size(1), 1)
-        dec_in = self.decoder_input(z)
-        dec_out, _ = self.decoder_lstm(dec_in)
-        return self.output_layer(dec_out)
+        x = x.permute(0, 2, 1) 
+        z = self.encoder(x)
+        out = self.decoder_input(z)
+        out = out.view(-1, 64, 256)
+        out = self.decoder(out)
+        return out.permute(0, 2, 1) 
     
 loss_history=[]
 # Train the autoencoder on the normal data
@@ -69,7 +54,7 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss(reduction="mean")
+    criterion = nn.L1Loss()
     loss_history.clear()
     model.train()
     for epoch in range(epochs):
@@ -81,66 +66,107 @@ def train_autoencoder(model, data, epochs=50, batch_size=32, lr=1e-4):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            total_loss += loss.item() 
+            total_loss += loss.item()
         epoch_loss = total_loss / len(dataloader)
         loss_history.append(epoch_loss);    
         print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")    
 
 # Compute reconstruction error on normal data
-def compute_sequence_error(model, data_seq):
+def compute_sequence_error(model, data_seq, batch_size=128):
     model.eval()
+    dataset = TensorDataset(torch.from_numpy(data_seq).float())
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     errors = []
     with torch.no_grad():
-        # Processing in batches to be safe
-        x_tensor = torch.from_numpy(data_seq).float().to(device)
-        output = model(x_tensor)
-        mse = torch.mean((output - x_tensor)**2, dim=(1, 2))
-        errors.append(mse.cpu().numpy())
+        for batch in dataloader:
+            x = batch[0].to(device)
+            output = model(x)
+            mae = torch.mean(torch.abs(output - x), dim=(1,2))
+            errors.append(mae.cpu().numpy())
     return np.concatenate(errors)
 
-
-# Determine threshold for anomaly detection
-def determine_threshold(errors, method='percentile', value=97):
-    if method == 'percentile':
-        return np.percentile(errors, value)
-    elif method == 'max':
-        return np.max(errors)
-    else:
-        raise ValueError("Method should be 'percentile' or 'max'")
-
-# run the main process
+# main process
 if __name__ == "__main__":
+    X, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset",window_size=2048 )
+    # Boolean mask for healthy windows
+    healthy_mask = (y == 0)
+    # Unique healthy files
+    healthy_files = np.unique(file_ids[healthy_mask])
+    np.random.shuffle(healthy_files)
+    split_idx = int(0.8 * len(healthy_files))
+    train_files = healthy_files[:split_idx]
+    val_files   = healthy_files[split_idx:]
+    # File-level masks
+    train_mask = np.isin(file_ids, train_files) & healthy_mask
+    val_mask   = np.isin(file_ids, val_files) & healthy_mask
+    train_raw = X[train_mask]
+    val_raw   = X[val_mask]
+    # Convert to FFT
+    train_data = np.array([to_fft(w) for w in X[train_mask]])
+    val_data   = np.array([to_fft(w) for w in X[val_mask]])
+     
+    print("Train shape:", train_data.shape)
+    print("Val shape:", val_data.shape)
 
-    # Load and normalize normal data
-    data_seq = load_normal_sequences("data/normal") 
-    np.random.shuffle(data_seq)
-    split_idx = int(0.8 * len(data_seq))
-    train_data, val_data = data_seq[:split_idx], data_seq[split_idx:]
-    train_data, val_data = normalize_sequences(train_data, val_data)
-    # Initialize and train autoencoder
-    model = LSTMAutoencoder()
-    train_autoencoder(model, train_data, epochs=50 , lr=1e-3)
+    # ===== NORMALIZATION (HEALTHY TRAIN ONLY) =====
+    mean = train_data.mean(axis=(0,1))
+    std  = train_data.std(axis=(0,1)) + 1e-8
+    train_data = (train_data - mean) / std
+    val_data   = (val_data - mean) / std
+    print("Number of healthy files:", len(healthy_files))
 
-    plt.figure(figsize=(10,5))
-    plt.plot(loss_history, label="Training Loss", color='blue')
-    plt.title("Autoencoder Training Loss Curve ")
-    plt.xlabel("Epoch")
-    plt.ylabel("Reconstruction Loss (MSE)")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-
-    # Save model
-    os.makedirs("data/models", exist_ok=True)
-    torch.save(model.state_dict(), "data/models/autoencoder.pt")
-  
-    # Compute reconstruction error on normal data
-    train_errors = compute_sequence_error(model, train_data)
-    threshold = determine_threshold(train_errors, method='percentile', value=97)
-    # Evaluate false positives on normal validation set
+    # ===== TRAIN =====
+    model = CNNAutoencoder()
+    train_autoencoder(model, train_data, epochs=50, lr=1e-3)
     val_errors = compute_sequence_error(model, val_data)
-    num_fp = np.sum(val_errors > threshold)
-    total = len(val_errors)
-    print(f"Calculated Threshold: {threshold:.6f}")
-    print(f"False Positives: {num_fp}/{total} ({100*num_fp/total:.2f}%)")
-    print(f"Accuracy on Normal Data: {100*(1-num_fp/total):.2f}%")
+    threshold_unsup = np.percentile(val_errors, 95)
+    # ===== EVALUATE ON FULL DATASET =====
+    X_fft = np.array([to_fft(w) for w in X])
+    X_norm = (X_fft - mean) / std
+    all_errors = compute_sequence_error(model, X_norm)
+    true_anomaly = (y != 0).astype(int)
+
+    # ===== ROC-based threshold selection =====
+    fpr, tpr, thresholds = roc_curve(true_anomaly, all_errors)
+    j_scores = tpr - fpr
+    best_idx = np.argmax(j_scores)
+    threshold = thresholds[best_idx]
+    print("ROC Threshold:", threshold)
+    print("Unsupervised Threshold:", threshold_unsup)
+
+
+    pred_anomaly = (all_errors > threshold).astype(int)
+    true_anomaly = (y != 0).astype(int)
+
+    tp = np.sum((pred_anomaly == 1) & (true_anomaly == 1))
+    fp = np.sum((pred_anomaly == 1) & (true_anomaly == 0))
+    fn = np.sum((pred_anomaly == 0) & (true_anomaly == 1))
+    tn = np.sum((pred_anomaly == 0) & (true_anomaly == 0))
+    precision = tp / (tp + fp + 1e-8)
+    recall = tp / (tp + fn + 1e-8)
+    auc = roc_auc_score(true_anomaly, all_errors)
+    healthy_errors = all_errors[y == 0]
+    fault_errors   = all_errors[y != 0]
+    ks_stat, p_value = ks_2samp(healthy_errors, fault_errors)
+
+    print("KS Statistic:", ks_stat)
+    print("KS p-value:", p_value)
+    print("TP:", tp)
+    print("FP:", fp)
+    print("FN:", fn)
+    print("TN:", tn)
+    print("Precision:", precision)
+    print("Recall:", recall)
+    print("ROC-AUC:", auc)
+    print("Mean Healthy Error:", healthy_errors.mean())
+    print("Mean Fault Error:", fault_errors.mean())
+    print("Error Ratio (Fault/Healthy):", fault_errors.mean() / healthy_errors.mean())
+
+
+     
+    plt.hist(healthy_errors, bins=50, alpha=0.6, label="Healthy")
+    plt.hist(fault_errors, bins=50, alpha=0.6, label="Fault")
+    plt.axvline(threshold, color='r', linestyle='--', label="Threshold")
+    plt.legend()
+    plt.title("Reconstruction Error Distribution")
+    plt.show()
