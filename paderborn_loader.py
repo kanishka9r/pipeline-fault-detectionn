@@ -7,38 +7,33 @@ from scipy.signal import hilbert
 def extract_signals(mat_path):
     try:
         # Try normal MATLAB loader
-        data = loadmat(mat_path)
-        main_key = [k for k in data.keys() if not k.startswith("__")][0]
-        mat_struct = data[main_key][0,0]
+        data = loadmat(mat_path)   #load mat files in dict
+        main_key = [k for k in data.keys() if not k.startswith("__")][0] #list of key only get y
+        mat_struct = data[main_key][0,0] #main structure in y of data
         x = mat_struct['X'][0,0]['Data'].flatten()
         y = mat_struct['Y'][0,0]['Data'].flatten()
     except:
         # Fallback for MATLAB v7.3 files
         with h5py.File(mat_path, 'r') as f:
             main_key = list(f.keys())[0]
-            mat_struct = f[main_key]
-            x = np.array(mat_struct['X']['Data']).flatten()
+            mat_struct = f[main_key] #it is not in 2d array
+            x = np.array(mat_struct['X']['Data']).flatten() #data is hdf5 version need to convert it in array
             y = np.array(mat_struct['Y']['Data']).flatten()
     return x, y
 
 def get_label_from_folder(folder_name):
     # Healthy
     if folder_name.startswith("K00"):
-        return 0  # Healthy
+        return 0 
     # Outer race
     elif folder_name.startswith("KA"):
-        num = int(folder_name[2:])
-        if num <= 2:
-            return 1  # Outer_Low
-        else:
-            return 2  # Outer_High
+        return 1 
     # Inner race
     elif folder_name.startswith("KI"):
-        num = int(folder_name[2:])
-        if num <= 2:
-            return 3  # Inner_Low
-        else:
-            return 4  # Inner_High
+        return 2
+    # Ball
+    elif folder_name.startswith("KB"):
+        return 3  
     else:
         return -1
 
@@ -52,12 +47,12 @@ def create_windows(signal_x, signal_y, window_size=2048):
             signal_y[start:end]
         ], axis=1)  # shape: (window_size, 2)
         windows.append(window)
-    return np.array(windows)
+    return np.array(windows) #shape(no of window , window_size , 2)
 
 def load_dataset_with_files(root_dir, window_size=2048):
-    X_data = []
-    y_labels = []
-    file_ids = []
+    X_data = []  #for data
+    y_labels = []  #for labels
+    file_ids = []   #for main file
     for folder in os.listdir(root_dir):
         folder_path = os.path.join(root_dir, folder)
         if not os.path.isdir(folder_path):
@@ -83,11 +78,11 @@ def load_dataset_with_files(root_dir, window_size=2048):
     return np.array(X_data), np.array(y_labels), np.array(file_ids)
 
 def to_fft(window):
-    # Apply Hilbert to get the envelope 
+    #1. Apply Hilbert to get the envelope 
     analytic_signal = hilbert(window, axis=0)
     amplitude_envelope = np.abs(analytic_signal)
     # 2. Compute FFT of the Envelope
     fft_vals = np.abs(np.fft.rfft(amplitude_envelope, axis=0))
-    # 3. Log scale (only once!)
+    # 3. Log scale
     fft_vals = np.log1p(fft_vals)
     return fft_vals[:-1, :]

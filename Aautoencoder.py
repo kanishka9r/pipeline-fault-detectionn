@@ -23,7 +23,7 @@ class CNNAutoencoder(nn.Module):
             nn.Conv1d(32, 64, kernel_size=5, stride=2, padding=2), 
             nn.BatchNorm1d(64),
             nn.ReLU(),
-
+  
             nn.Flatten(),
             nn.Linear(64 * 256, 128), 
             nn.ReLU()
