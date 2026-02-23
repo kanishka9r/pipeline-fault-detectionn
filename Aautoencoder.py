@@ -125,7 +125,7 @@ if __name__ == "__main__":
     train_autoencoder(model, train_data, epochs=50, lr=1e-3)
     val_errors = compute_sequence_error(model, val_data)
     val_errors = np.log(1 + val_errors)
-    threshold_unsup = np.percentile(val_errors, 95)
+    threshold_unsup = val_errors.mean() + 0.1 * val_errors.std()
 
     # evaluate on full dataset
     X_fft = np.array([to_fft(w) for w in x])
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     threshold = thresholds[best_idx]
     print("ROC Threshold:", threshold)
     print("Unsupervised Threshold:", threshold_unsup)
-    pred_anomaly = (all_errors > threshold).astype(int)
+    pred_anomaly = (all_errors > threshold_unsup).astype(int)
 
     # metrix calculation for tp , fp , fn , tn
     tp = np.sum((pred_anomaly == 1) & (true_anomaly == 1))
@@ -163,11 +163,10 @@ if __name__ == "__main__":
     print("ROC-AUC:", auc)
     print("Mean Healthy Error:", healthy_errors.mean())
     print("Mean Fault Error:", fault_errors.mean())
-    print("Error Ratio (Fault/Healthy):", fault_errors.mean() / healthy_errors.mean())
 
     plt.hist(healthy_errors, bins=50, alpha=0.6, label="Healthy")
     plt.hist(fault_errors, bins=50, alpha=0.6, label="Fault")
-    plt.axvline(threshold, color='r', linestyle='--', label="Threshold")
+    plt.axvline(threshold_unsup, color='r', linestyle='--', label="Threshold")
     plt.legend()
     plt.title("Reconstruction Error Distribution")
     plt.show()

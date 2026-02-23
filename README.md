@@ -1,6 +1,6 @@
 # Bearing Fault Detection using CNN Autoencoder + CNN Classifier
 
-This project implements a robust pipeline for industrial bearing health monitoring. It utilizes the Paderborn University Bearing Dataset to perform both unsupervised Anomaly Detection (detecting if a fault exists) and supervised Fault Classification (identifying the specific type and severity of the fault). It is designed to provide automated predictive maintenance. By analyzing vibration signals, it reduces downtime by identifying early-stage degradation and providing precise diagnostics of the failure mode.
+This project implements a robust pipeline for industrial bearing health monitoring. It utilizes the Paderborn University Bearing Dataset to perform both unsupervised Anomaly Detection (detecting if a fault exists) and supervised Fault Classification (identifying the specific type). It is designed to provide automated predictive maintenance. By analyzing vibration signals, it reduces downtime by identifying early-stage degradation and providing precise diagnostics of the failure mode.
 
 ## Features
 
@@ -15,8 +15,7 @@ This project implements a robust pipeline for industrial bearing health monitori
 The system is optimized for the Paderborn University (PU) Dataset:
 
 - **Healthy State:** Baseline operating conditions.
-- **Artificial & Real Damage:** Includes Outer Race and Inner Race damages. 
-- **Severity Levels:** Categorized into Low and High severity based on the damage extent.
+- **Artificial & Real Damage:** Includes Outer Race , Inner Race and Ball Fault damages. 
 - **Format:** High-frequency vibration data stored in .mat (MATLAB) files.
 
 ## Model Architecture
@@ -44,7 +43,7 @@ An unsupervised Convolutional Autoencoder serves as the first line of defense:
 Once an anomaly is detected, a Supervised 1D-CNN classifies the failure:
 
 1) Architecture: 4-layer Deep Convolutional Network with Batch Normalization and Dropout (0.4) for regularization.
-2) Categories: Classified into 5 states (Healthy, Outer_Low, Outer_High, Inner_Low, Inner_High).
+2) Categories: Classified into 4 states (Healthy, Outer_Fault, Inner_Fault, Ball_Fault).
 3) Optimization: Utilizes a ReduceLROnPlateau scheduler and balanced class weights to handle dataset imbalances.
 
 ## Tech Stack
