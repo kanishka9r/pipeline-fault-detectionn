@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-import os
 import time
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -27,89 +26,52 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
-# Train / Validation split (stratified)
-X, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset", window_size=2048) 
-print("Total windows:", len(X)) # Convert to FFT (recommended for bearings) 
-X = np.array([to_fft(w) for w in X])
+# Train / Validation split 
+x, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset", window_size=2048) 
+print("Total windows:", len(x))
+x = np.array([to_fft(w) for w in x])
 unique_files = np.unique(file_ids)
-train_files, val_files = train_test_split(
-    unique_files,
-    test_size=0.2,
-    random_state=42
-)
+train_files, val_files = train_test_split(unique_files, test_size=0.2, random_state=42)
 
+# true labels and data
 train_idx = np.isin(file_ids, train_files)
 val_idx  = np.isin(file_ids, val_files)
-
-# Split FIRST
-X_train = X[train_idx]
-X_val   = X[val_idx]
+x_train = x[train_idx]
+x_val   = x[val_idx]
 y_train = y[train_idx]
 y_val   = y[val_idx]
 
-# ===============================
-# FILE LEAKAGE CHECK
-# ===============================
-
-print("\n========== FILE LEAKAGE CHECK ==========")
-
-# Unique files in each split
-train_unique_files = set(train_files)
-val_unique_files   = set(val_files)
-
-# 1️⃣ Check file overlap
-file_overlap = train_unique_files.intersection(val_unique_files)
+# file leakage check
+file_overlap = np.intersect1d(train_files, val_files)
 print("Common files between Train and Val:", len(file_overlap))
-
 if len(file_overlap) == 0:
-    print("✔ No file-level leakage detected.")
+    print("No file-level leakage detected.")
 else:
-    print("❌ File leakage detected!")
-    print(file_overlap)
+    print("File leakage detected")
+    print(len(file_overlap))
 
-# 2️⃣ Check window overlap (extra safety)
-train_window_files = set(file_ids[train_idx])
-val_window_files   = set(file_ids[val_idx])
+# normalization (train data only)
+mean = x_train.mean(axis=(0,1))
+std  = x_train.std(axis=(0,1)) + 1e-8
+x_train = (x_train - mean) / std
+x_val   = (x_val - mean) / std
 
-window_overlap = train_window_files.intersection(val_window_files)
-print("Window-level overlap:", len(window_overlap))
-
-if len(window_overlap) == 0:
-    print("✔ No window-level leakage detected.")
-else:
-    print("❌ Window leakage detected!")
-
-print("=========================================\n")
-
-
-# ===============================
-# Normalization (TRAIN ONLY)
-# ===============================
-
-mean = X_train.mean(axis=(0,1))
-std  = X_train.std(axis=(0,1)) + 1e-8
-
-X_train = (X_train - mean) / std
-X_val   = (X_val - mean) / std
-
-# Convert to tensors
-X_train = torch.tensor(X_train, dtype=torch.float32)
-X_val   = torch.tensor(X_val, dtype=torch.float32)
-y_train = torch.tensor(y_train, dtype=torch.long)
+# Convert to tensors and dataloader
+x_train = torch.tensor(x_train, dtype=torch.float32)
+x_val   = torch.tensor(x_val, dtype=torch.float32) #weights can be in decimal
+y_train = torch.tensor(y_train, dtype=torch.long) #nn.crossentrophyloss() requires int64 which is equal to long
 y_val   = torch.tensor(y_val, dtype=torch.long)
-
-train_set = TensorDataset(X_train, y_train)
-val_set   = TensorDataset(X_val, y_val)
-
+train_set = TensorDataset(x_train, y_train)
+val_set   = TensorDataset(x_val, y_val)
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 val_loader   = DataLoader(val_set, batch_size=batch_size)
-
 num_classes = len(np.unique(y))
 print("Num classes:", num_classes)
 
-
-# Define the CNN-LSTM model with multi-task learning
+# Define the CNN model for classification
 class CNNClassifier(nn.Module):
     def __init__(self,  num_classes):
         super().__init__()
@@ -128,71 +90,64 @@ class CNNClassifier(nn.Module):
             nn.BatchNorm1d(128),
             nn.ReLU(),
 
-            nn.Conv1d(128, 256, kernel_size=3, padding=1),  # NEW
+            nn.Conv1d(128, 256, kernel_size=3, padding=1), 
             nn.BatchNorm1d(256),
             nn.ReLU(),
 
-            nn.AdaptiveAvgPool1d(1)
-        )
+            nn.AdaptiveAvgPool1d(1) ) # take avg of each channel on time (batch size , 256 , 1) 
         
         self.classifier = nn.Sequential(
             nn.Linear(256, 64),
             nn.ReLU(),
-            nn.Dropout(0.4),  # NEW
-            nn.Linear(64, num_classes)
-        )
+            nn.Dropout(0.4), 
+            nn.Linear(64, num_classes))
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
         x = self.features(x)
-        x = x.squeeze(-1)
+        x = x.squeeze(-1) # (batch size , 256)
         return self.classifier(x)
 
+#move model to device
 model = CNNClassifier(num_classes).to(device)
 
 # Class weights (important for imbalance)
-class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(y_train.numpy()),y=y_train.numpy())
+class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(y_train.numpy()) ,y=y_train.numpy())
 class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
+# defined criterion , optimizer , scheduler
 criterion = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',patience=5 ,factor=0.5)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',patience=5 ,factor=0.5)
 
-# Training loop with early stopping on val combined loss
+# Training loop with early stopping on val loss
 best_val_acc = 0.0
 patience_cnt = 0
 train_acc_history = []
 val_acc_history = []
-
 start_time = time.time()
+
 for epoch in range(1, num_epoch + 1):
     epoch_start = time.time()
+
     #train model
     model.train()
     train_loss_sum = 0.0
     correct = 0
     total = 0
-    
-    for X_batch, y_batch in train_loader:
-        X_batch = X_batch.to(device)
+    for x_batch, y_batch in train_loader:
+        x_batch = x_batch.to(device)
         y_batch = y_batch.to(device)
-
         optimizer.zero_grad() #setting zero gradient
-        logits = model(X_batch) #output from model
-
-        # Compute losses
-        loss = criterion(logits, y_batch)
+        output = model(x_batch) #output from model
+        loss = criterion(output, y_batch) # Compute losses
         loss.backward() #loss backpropagation
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0) #prevent gradient exploding
         optimizer.step() #update model parameters
-
-        # Accumulate losses 
-        train_loss_sum += loss.item() * X_batch.size(0)
-
-
-        preds = logits.argmax(dim=1)
-        correct += (preds == y_batch).sum().item()
-        total += X_batch.size(0)
+        train_loss_sum += loss.item() * x_batch.size(0) # Accumulate losses 
+        preds = output.argmax(dim=1) # maxi value per row
+        correct += (preds == y_batch).sum().item() # sum of correct output
+        total += x_batch.size(0)
 
     # printable parameters
     train_loss_avg = train_loss_sum / len(train_set)
@@ -204,27 +159,24 @@ for epoch in range(1, num_epoch + 1):
     val_loss_sum = 0.0
     val_correct = 0
     val_total = 0
-
     with torch.no_grad():
-        for X_batch, y_batch in val_loader:
-            X_batch = X_batch.to(device)
+        for x_batch, y_batch in val_loader:
+            x_batch = x_batch.to(device)
             y_batch = y_batch.to(device)
-
-            logits = model(X_batch)
-            loss = criterion(logits, y_batch)
-
-            val_loss_sum += loss.item() * X_batch.size(0)
-
-            preds = logits.argmax(dim=1)
+            output = model(x_batch)
+            loss = criterion(output, y_batch)
+            val_loss_sum += loss.item() * x_batch.size(0)
+            preds = output.argmax(dim=1)
             val_correct += (preds == y_batch).sum().item()
-            val_total += X_batch.size(0)
+            val_total += x_batch.size(0)
 
+    # printable parameters
     val_loss_avg = val_loss_sum / len(val_set)
     val_acc = val_correct / val_total
     val_acc_history.append(val_acc)
 
     #setup learning rate scheduler
-    scheduler.step(val_loss_avg)
+    scheduler.step(val_acc)
 
     # Print epoch results
     print(f"Epoch {epoch}/{num_epoch} | Train loss {train_loss_avg:.4f}  "
@@ -235,7 +187,7 @@ for epoch in range(1, num_epoch + 1):
         best_val_acc = val_acc
         patience_cnt = 0
         torch.save(model.state_dict(), "data_genration/model/best_paderborn_cnn.pt")
-        print("  Saved Best Model")
+        print(" Saved Best Model")
     else:
         patience_cnt += 1
         if patience_cnt >= patience:
@@ -245,42 +197,27 @@ for epoch in range(1, num_epoch + 1):
     print(f"[EPOCH {epoch}] Total Time: {epoch_end - epoch_start:.2f} seconds\n")    
 end_time = time.time()
 total_time = end_time - start_time
-print("\n================ TRAINING TIME SUMMARY ================")
 print(f"Total Training Time: {total_time:.2f} seconds")
 print(f"Average Time per Epoch: {total_time / epoch:.2f} seconds")
-print("========================================================")
+
 # Final evaluation (load best and print classification report + regression MAE)
-# ===============================
-# LOAD BEST MODEL
-# ===============================
-
-model.load_state_dict(torch.load("data_genration/model/best_paderborn_cnn.pt"))
+model.load_state_dict(torch.load("data_genration/model/best_paderborn_cnn.pt" , map_location=device))
 model.eval()
-
 all_pred = []
 all_true = []
-
 with torch.no_grad():
-    for X_batch, y_batch in val_loader:
-        X_batch = X_batch.to(device)
-        logits = model(X_batch)
-
-        preds = logits.argmax(dim=1).cpu().numpy()
+    for x_batch, y_batch in val_loader:
+        x_batch = x_batch.to(device)
+        output = model(x_batch)
+        preds = output.argmax(dim=1).cpu().numpy()
         all_pred.extend(preds)
-        all_true.extend(y_batch.numpy())
+        y_batch = y_batch.cpu().numpy()
+        all_true.extend(y_batch)
+class_names = [ "Healthy", "Outer_fault", "Inner_fault", "Ball_fault"]
 
-class_names = [
-    "Healthy",
-    "Outer_Low",
-    "Outer_High",
-    "Inner_Low",
-    "Inner_High"
-]
-
-
+#classification report
 print("\nClassification Report (Validation):")
 print(classification_report(all_true, all_pred, target_names=class_names))
-
 
 # Compute confusion matrix
 cm = confusion_matrix(all_true, all_pred)
@@ -302,3 +239,8 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.grid(True)
 plt.show()
+
+print(np.unique(y_train.numpy()))
+print(class_names)
+for i, name in enumerate(class_names):
+    print(i, "->", name)
