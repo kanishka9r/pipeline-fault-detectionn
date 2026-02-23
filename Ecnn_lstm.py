@@ -239,8 +239,3 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.grid(True)
 plt.show()
-
-print(np.unique(y_train.numpy()))
-print(class_names)
-for i, name in enumerate(class_names):
-    print(i, "->", name)
