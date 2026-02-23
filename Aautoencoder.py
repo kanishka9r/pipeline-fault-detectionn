@@ -127,33 +127,32 @@ if __name__ == "__main__":
     val_errors = np.log(1 + val_errors)
     threshold_unsup = np.percentile(val_errors, 95)
 
-    # ===== EVALUATE ON FULL DATASET =====
+    # evaluate on full dataset
     X_fft = np.array([to_fft(w) for w in x])
     X_norm = (X_fft - mean) / std
     all_errors = compute_sequence_error(model, X_norm)
-    all_errors = np.log1p(all_errors)
-    true_anomaly = (y != 0).astype(int)
+    all_errors = np.log1p(all_errors) 
+    true_anomaly = (y != 0).astype(int) # 0 = healthy , 1 = anomaly
 
-    # ===== ROC-based threshold selection =====
+    # roc-based threshold selection 
     fpr, tpr, thresholds = roc_curve(true_anomaly, all_errors)
     j_scores = tpr - fpr
     best_idx = np.argmax(j_scores)
     threshold = thresholds[best_idx]
     print("ROC Threshold:", threshold)
     print("Unsupervised Threshold:", threshold_unsup)
-
     pred_anomaly = (all_errors > threshold).astype(int)
-    true_anomaly = (y != 0).astype(int)
 
+    # metrix calculation for tp , fp , fn , tn
     tp = np.sum((pred_anomaly == 1) & (true_anomaly == 1))
     fp = np.sum((pred_anomaly == 1) & (true_anomaly == 0))
     fn = np.sum((pred_anomaly == 0) & (true_anomaly == 1))
     tn = np.sum((pred_anomaly == 0) & (true_anomaly == 0))
-    precision = tp / (tp + fp + 1e-8)
-    recall = tp / (tp + fn + 1e-8)
-    auc = roc_auc_score(true_anomaly, all_errors)
-    healthy_errors = all_errors[y == 0]
-    fault_errors   = all_errors[y != 0]
+    precision = tp / (tp + fp + 1e-8) #avoid div by 0
+    recall = tp / (tp + fn + 1e-8) #avoid div by 0
+    auc = roc_auc_score(true_anomaly, all_errors)  #area under the curve . x = fpr , y = tpr
+    healthy_errors = all_errors[y == 0] #healthy error value
+    fault_errors   = all_errors[y != 0] #faulty error value
 
     print("TP:", tp)
     print("FP:", fp)
