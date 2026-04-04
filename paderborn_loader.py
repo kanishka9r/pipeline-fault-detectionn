@@ -23,16 +23,16 @@ def extract_signals(mat_path):
 
 def get_label_from_folder(folder_name):
     # Healthy
-    if folder_name.startswith("K00"):
+    if folder_name.startswith("K00"):  #healthy
         return 0 
     # Outer race
-    elif folder_name.startswith("KA"):
+    elif folder_name.startswith("KA"): #outer race
         return 1 
     # Inner race
-    elif folder_name.startswith("KI"):
+    elif folder_name.startswith("KI"):  #inner race
         return 2
     # Ball
-    elif folder_name.startswith("KB"):
+    elif folder_name.startswith("KB"): #ball fault
         return 3  
     else:
         return -1

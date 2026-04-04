@@ -94,19 +94,25 @@ if __name__ == "__main__":
     # Boolean mask for healthy windows
     healthy_mask = (y == 0)
     # Unique healthy files
-    healthy_files = np.unique(file_ids[healthy_mask])
+    all_files = np.unique(file_ids)
     #shuffle files
-    np.random.shuffle(healthy_files)
+    np.random.shuffle(all_files)
     # split the data
-    split_idx = int(0.8 * len(healthy_files))
-    train_files = healthy_files[:split_idx]
-    val_files   = healthy_files[split_idx:]
+    train_split = int(0.7 * len(all_files))
+    val_split   = int(0.85 * len(all_files))
+
+    train_files = all_files[:train_split]
+    val_files   = all_files[train_split:val_split]
+    test_files  = all_files[val_split:]
     # File-level masks
     train_mask = np.isin(file_ids, train_files) & healthy_mask
     val_mask   = np.isin(file_ids, val_files) & healthy_mask
+    test_mask = np.isin(file_ids, test_files)
+    test_raw = x[test_mask]
     train_raw = x[train_mask]
     val_raw   = x[val_mask]
     # Convert to FFT
+    test_data = np.array([to_fft(w) for w in test_raw])
     train_data = np.array([to_fft(w) for w in x[train_mask]])
     val_data   = np.array([to_fft(w) for w in x[val_mask]])
      
@@ -118,30 +124,30 @@ if __name__ == "__main__":
     std  = train_data.std(axis=(0,1)) + 1e-8 # to avoid divide by 0
     train_data = (train_data - mean) / std # standardization
     val_data   = (val_data - mean) / std #prevent data leakage
-    print("Number of healthy files:", len(healthy_files))
+    test_data = (test_data - mean) / std
+    print("Number of healthy files:", len(all_files))
 
     # train on training data & threshold for validating dataset
     model = CNNAutoencoder()
-    train_autoencoder(model, train_data, epochs=50, lr=1e-3)
+    train_autoencoder(model, train_data, epochs=100, lr=1e-3)
     val_errors = compute_sequence_error(model, val_data)
     val_errors = np.log(1 + val_errors)
-    threshold_unsup = val_errors.mean() + 0.1 * val_errors.std()
+    threshold_unsup = np.percentile(val_errors, 55)
 
     # evaluate on full dataset
-    X_fft = np.array([to_fft(w) for w in x])
-    X_norm = (X_fft - mean) / std
-    all_errors = compute_sequence_error(model, X_norm)
-    all_errors = np.log1p(all_errors) 
-    true_anomaly = (y != 0).astype(int) # 0 = healthy , 1 = anomaly
+    test_errors = compute_sequence_error(model, test_data)
+    test_errors = np.log1p(test_errors)
+    y_test = y[test_mask]
+    true_anomaly = (y_test != 0).astype(int)
 
     # roc-based threshold selection 
-    fpr, tpr, thresholds = roc_curve(true_anomaly, all_errors)
+    fpr, tpr, thresholds = roc_curve(true_anomaly, test_errors)
     j_scores = tpr - fpr
     best_idx = np.argmax(j_scores)
     threshold = thresholds[best_idx]
     print("ROC Threshold:", threshold)
     print("Unsupervised Threshold:", threshold_unsup)
-    pred_anomaly = (all_errors > threshold_unsup).astype(int)
+    pred_anomaly = (test_errors > threshold_unsup).astype(int)
 
     # metrix calculation for tp , fp , fn , tn
     tp = np.sum((pred_anomaly == 1) & (true_anomaly == 1))
@@ -150,9 +156,9 @@ if __name__ == "__main__":
     tn = np.sum((pred_anomaly == 0) & (true_anomaly == 0))
     precision = tp / (tp + fp + 1e-8) #avoid div by 0
     recall = tp / (tp + fn + 1e-8) #avoid div by 0
-    auc = roc_auc_score(true_anomaly, all_errors)  #area under the curve . x = fpr , y = tpr
-    healthy_errors = all_errors[y == 0] #healthy error value
-    fault_errors   = all_errors[y != 0] #faulty error value
+    auc = roc_auc_score(true_anomaly, test_errors)  #area under the curve . x = fpr , y = tpr
+    healthy_errors = test_errors[y_test == 0] #healthy error value
+    fault_errors   = test_errors[y_test != 0] #faulty error value
 
     print("TP:", tp)
     print("FP:", fp)
