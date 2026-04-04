@@ -34,15 +34,19 @@ x, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset", windo
 print("Total windows:", len(x))
 x = np.array([to_fft(w) for w in x])
 unique_files = np.unique(file_ids)
-train_files, val_files = train_test_split(unique_files, test_size=0.2, random_state=42)
+train_files, temp_files = train_test_split(unique_files, test_size=0.3, random_state=42)
+val_files, test_files = train_test_split(temp_files, test_size=0.5, random_state=42)
 
 # true labels and data
 train_idx = np.isin(file_ids, train_files)
 val_idx  = np.isin(file_ids, val_files)
+test_idx = np.isin(file_ids, test_files)
 x_train = x[train_idx]
 x_val   = x[val_idx]
 y_train = y[train_idx]
 y_val   = y[val_idx]
+x_test = x[test_idx]
+y_test = y[test_idx]
 
 # file leakage check
 file_overlap = np.intersect1d(train_files, val_files)
@@ -58,16 +62,21 @@ mean = x_train.mean(axis=(0,1))
 std  = x_train.std(axis=(0,1)) + 1e-8
 x_train = (x_train - mean) / std
 x_val   = (x_val - mean) / std
+x_test = (x_test - mean) / std
 
 # Convert to tensors and dataloader
 x_train = torch.tensor(x_train, dtype=torch.float32)
 x_val   = torch.tensor(x_val, dtype=torch.float32) #weights can be in decimal
 y_train = torch.tensor(y_train, dtype=torch.long) #nn.crossentrophyloss() requires int64 which is equal to long
 y_val   = torch.tensor(y_val, dtype=torch.long)
+x_test = torch.tensor(x_test, dtype=torch.float32)
+y_test = torch.tensor(y_test, dtype=torch.long)
 train_set = TensorDataset(x_train, y_train)
 val_set   = TensorDataset(x_val, y_val)
+test_set = TensorDataset(x_test, y_test)
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 val_loader   = DataLoader(val_set, batch_size=batch_size)
+test_loader = DataLoader(test_set, batch_size=batch_size)
 num_classes = len(np.unique(y))
 print("Num classes:", num_classes)
 
@@ -122,6 +131,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',pati
 
 # Training loop with early stopping on val loss
 best_val_acc = 0.0
+print("Test files:", len(test_files))
 patience_cnt = 0
 train_acc_history = []
 val_acc_history = []
@@ -206,7 +216,7 @@ model.eval()
 all_pred = []
 all_true = []
 with torch.no_grad():
-    for x_batch, y_batch in val_loader:
+    for x_batch, y_batch in test_loader:
         x_batch = x_batch.to(device)
         output = model(x_batch)
         preds = output.argmax(dim=1).cpu().numpy()
@@ -216,7 +226,7 @@ with torch.no_grad():
 class_names = [ "Healthy", "Outer_fault", "Inner_fault", "Ball_fault"]
 
 #classification report
-print("\nClassification Report (Validation):")
+print("\nClassification Report (Test):")
 print(classification_report(all_true, all_pred, target_names=class_names))
 
 # Compute confusion matrix
@@ -225,7 +235,7 @@ plt.figure(figsize=(15, 15))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
-plt.title('Confusion Matrix (Validation)')
+plt.title('Confusion Matrix (Test)')
 plt.show()
 
 # Plot training and validation accuracy
