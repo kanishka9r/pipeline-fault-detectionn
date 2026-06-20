@@ -3,12 +3,13 @@ import torch
 import time
 import numpy as np
 from sklearn.model_selection import train_test_split
-from torch.utils.data import  DataLoader , TensorDataset , Subset
+from torch.utils.data import  DataLoader , TensorDataset
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+from model import CNNClassifier
 from paderborn_loader import load_dataset_with_files, to_fft
 
 # Constants
@@ -79,43 +80,6 @@ val_loader   = DataLoader(val_set, batch_size=batch_size)
 test_loader = DataLoader(test_set, batch_size=batch_size)
 num_classes = len(np.unique(y))
 print("Num classes:", num_classes)
-
-# Define the CNN model for classification
-class CNNClassifier(nn.Module):
-    def __init__(self,  num_classes):
-        super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv1d(2, 32, kernel_size=7, padding=3),
-            nn.BatchNorm1d(32),
-            nn.ReLU(),
-            nn.MaxPool1d(2),
-
-            nn.Conv1d(32, 64, kernel_size=5, padding=2),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.MaxPool1d(2),
-
-            nn.Conv1d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-
-            nn.Conv1d(128, 256, kernel_size=3, padding=1), 
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-
-            nn.AdaptiveAvgPool1d(1) ) # take avg of each channel on time (batch size , 256 , 1) 
-        
-        self.classifier = nn.Sequential(
-            nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Dropout(0.4), 
-            nn.Linear(64, num_classes))
-
-    def forward(self, x):
-        x = x.permute(0, 2, 1)
-        x = self.features(x)
-        x = x.squeeze(-1) # (batch size , 256)
-        return self.classifier(x)
 
 #move model to device
 model = CNNClassifier(num_classes).to(device)
@@ -249,3 +213,6 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.grid(True)
 plt.show()
+
+np.save("data_genration/model/mean.npy", mean)
+np.save("data_genration/model/std.npy",std)
