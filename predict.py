@@ -12,7 +12,7 @@ device = torch.device( "cuda" if torch.cuda.is_available()
     else "cpu"
 )
 
-CLASS_NAMES = [
+class_name = [
     "Healthy",
     "Outer Fault",
     "Inner Fault",
@@ -20,20 +20,14 @@ CLASS_NAMES = [
 ]
 
 # LOAD MODEL
-model = CNNClassifier(
-    num_classes=4
-).to(device)
-
+model = CNNClassifier(num_classes=4).to(device)
 model.load_state_dict(
     torch.load(
         "data_genration/model/best_paderborn_cnn.pt",
         map_location=device
     )
 )
-
 model.eval()
-print("Model Loaded")
-
 
 # LOAD DATA
 x, y, file_ids = load_dataset_with_files(
@@ -44,8 +38,6 @@ x = np.array([
     to_fft(w)
     for w in x
 ])
-print("Total Samples:", len(x))
-
 
 # NORMALIZATION
 mean = np.load(
@@ -55,7 +47,6 @@ std = np.load(
         "data_genration/model/std.npy"
     )
 x = (x - mean) / std
-print("Loaded Saved Mean/Std")
 
 # PICK SAMPLE
 sample_idx = random.randint(0,len(x)-1)
@@ -69,39 +60,24 @@ sample = sample.to(device)
 # PREDICTION
 with torch.no_grad():
     output = model(sample)
-    probs = torch.softmax(
-        output,
-        dim=1
+    probs = torch.softmax( output, dim=1
     )
-    confidence, pred = torch.max(
-        probs,
-        dim=1
+    confidence, pred = torch.max(probs,dim=1
     )
 pred_class = pred.item()
-confidence = (
-    confidence.item() * 100
-)
+confidence = (confidence.item() * 100)
 
 # OUTPUT
-print("Sample Index:", sample_idx)
 print("\nPrediction Result")
-print(
-    "True Label :",
-    CLASS_NAMES[y[sample_idx]]
-)
-print(
-    "Predicted  :",
-    CLASS_NAMES[pred_class]
-)
-print(
-    f"Confidence : {confidence:.2f}%"
-)
+print("\nFault:")
+print(class_name[pred_class])
+print(f"\nConfidence : {confidence:.2f}%")
 print("\nClass Probabilities")
 for i, p in enumerate(
     probs[0].cpu().numpy()
 ):
     print(
-        f"{CLASS_NAMES[i]} : {p*100:.2f}%"
+        f"{class_name[i]} : {p*100:.2f}%"
     )
 
 # GRADCAM
@@ -112,38 +88,6 @@ gradcam = GradCAM(
 cam, pred = gradcam.generate(
     sample
 )
-print(
-    "Predicted:",
-    CLASS_NAMES[pred]
-)
-print(
-    "CAM Shape:",
-    cam.shape
-)
-print(
-    "CAM Max:",
-    cam.max()
-)
-print(
-    "CAM Min:",
-    cam.min()
-)
-
-# GRADCAM IMPORTANCE PLOT
-plt.figure(figsize=(12,4))
-plt.plot(cam)
-plt.title(
-    "GradCAM Importance"
-)
-plt.xlabel(
-    "Feature Position"
-)
-plt.ylabel(
-    "Importance"
-)
-plt.grid(True)
-plt.show()    
-
 
 # FFT + GRADCAM OVERLAY
 fft_signal = sample.cpu().numpy()[0, :, 0]
@@ -160,25 +104,19 @@ cam_resized = (
 )
 
 plt.figure(figsize=(14,5))
-
 plt.plot(
     fft_signal,
     label="FFT Spectrum"
 )
-
 plt.plot(
     cam_resized * np.max(fft_signal),
     label="GradCAM Importance"
 )
-
 plt.title(
-    f"Prediction: {CLASS_NAMES[pred]}"
+    f"Prediction: {class_name[pred]}"
 )
-
 plt.xlabel("FFT Bin")
-
 plt.ylabel("Magnitude")
-
 plt.legend()
 plt.grid(True)
 plt.show()
@@ -194,7 +132,51 @@ start_bin = int(
 end_bin = int(
     important_idx.max()
 )
+
+region_center = (start_bin + end_bin) / 2
+if region_center < 100:
+    region_text = "Low Frequency Region"
+elif region_center < 400:
+    region_text = "Mid Frequency Region"
+else:
+    region_text = "High Frequency Region"
+
+#Output
 print(
-    f"Important FFT Region: "
+    f"\nImportant FFT Region: "
     f"{start_bin}-{end_bin}"
 )
+print("\nExplanation:")
+if confidence > 95:
+    print(
+        "Model is highly confident."
+    )
+elif confidence > 80:
+    print(
+        "Model confidence is moderate."
+    )
+else:
+    print(
+        "Prediction should be reviewed manually."
+    )
+print(
+    f"CNN focused on FFT region "
+    f"{start_bin}-{end_bin}"
+    f"({region_text})."
+)
+if pred_class == 0:
+    print(
+        "Spectral pattern resembles healthy bearings."
+    )
+elif pred_class == 1:
+    print(
+        "Frequency distribution matches Outer Race fault patterns."
+    )
+elif pred_class == 2:
+    print(
+        "Frequency distribution matches Inner Race fault patterns."
+    )
+elif pred_class == 3:
+    print(
+        " Frequency distribution matches Ball Fault patterns."
+    )
