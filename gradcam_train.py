@@ -221,6 +221,3 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.grid(True)
 plt.show()
-
-np.save("data_genration/model/mean.npy", mean)
-np.save("data_genration/model/std.npy",std)

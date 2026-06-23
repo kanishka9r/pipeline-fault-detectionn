@@ -63,7 +63,7 @@ def load_dataset_with_files(root_dir, window_size=2048):
         for file in os.listdir(folder_path):
             if not file.endswith(".mat"):
                 continue
-            if not file.startswith("N15"):
+            if not file.startswith("N"):
                 continue
             file_path = os.path.join(folder_path, file)
             try:

@@ -37,20 +37,10 @@ class CNNLSTMClassifier(nn.Module):
         )
 
     def forward(self, x):
-
-        # (B,1024,2) -> (B,2,1024)
-        x = x.permute(0, 2, 1)
-
-        # CNN
-        x = self.features(x)
-
-        # (B,128,L) -> (B,L,128)
-        x = x.permute(0, 2, 1)
-
-        # LSTM
-        lstm_out, (hidden, cell) = self.lstm(x)
-
-        # last hidden state
-        x = hidden[-1]
+        x = x.permute(0, 2, 1)  # (B,1024,2) -> (B,2,1024)
+        x = self.features(x)    # CNN
+        x = x.permute(0, 2, 1)       # (B,128,L) -> (B,L,128)
+        lstm_out, (hidden, cell) = self.lstm(x)     # LSTM
+        x = hidden[-1]  # last hidden state
 
         return self.classifier(x)
