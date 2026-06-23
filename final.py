@@ -87,15 +87,14 @@ for i, p in enumerate(
     )
 
 gradcam_model = CNNGradCAM(4).to(device)
-
 gradcam_model.load_state_dict(
     torch.load(
         "data_genration/model/best_gradcam_cnn.pt",
         map_location=device
     )
 )
-
 gradcam_model.eval()
+
 # GRADCAM
 gradcam = GradCAM(gradcam_model, gradcam_model.features[11])
 cam, gradcam_pred = gradcam.generate(sample)
@@ -119,7 +118,7 @@ plt.grid(True)
 plt.show()
 
 # IMPORTANT FFT REGION
-threshold = 0.5
+threshold = 0.75
 important_idx = np.where(
     cam_resized > threshold
 )[0]
