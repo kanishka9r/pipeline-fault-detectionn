@@ -93,7 +93,7 @@ criterion = nn.CrossEntropyLoss(weight=class_weights)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max',patience=5 ,factor=0.5)
 
-# Training loop with early stopping on val loss
+# Training loop with early stopping on val acc
 best_val_acc = 0.0
 print("Test files:", len(test_files))
 patience_cnt = 0

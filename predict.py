@@ -83,7 +83,7 @@ for i, p in enumerate(
 # GRADCAM
 gradcam = GradCAM(
     model,
-    model.features[11]
+    model.features[8]
 )
 cam, pred = gradcam.generate(
     sample
