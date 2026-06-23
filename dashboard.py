@@ -180,7 +180,19 @@ def load_normalization_params():
 @st.cache_data
 def get_categorized_test_files():
     """Categorize test files by actual class for easier exploration."""
-    test_files = np.load(os.path.join("data_genration", "model", "test_files.npy"), allow_pickle=True)
+    demo_path = os.path.join("data_genration", "model", "demo_signals.npz")
+    has_full_data = os.path.exists(os.path.join("data_genration", "pipelinedataset"))
+    
+    if not has_full_data and os.path.exists(demo_path):
+        # We are on the cloud demo, load only the demo files
+        demo_data = np.load(demo_path)
+        test_files = [k.replace('_x', '') for k in demo_data.files if k.endswith('_x')]
+    else:
+        test_files = np.load(os.path.join("data_genration", "model", "test_files.npy"), allow_pickle=True)
+        # Randomly select a subset to keep the dashboard lightweight
+        np.random.seed(42)
+        test_files = np.random.choice(test_files, min(50, len(test_files)), replace=False)
+
     categorized = {
         "Healthy": [],
         "Outer Fault": [],
@@ -204,31 +216,41 @@ def get_categorized_test_files():
 # --- Single File Processor ---
 def load_and_process_file(filename, window_size=2048):
     """Loads a single MATLAB file and slices it into windows."""
+    demo_path = os.path.join("data_genration", "model", "demo_signals.npz")
+    has_full_data = os.path.exists(os.path.join("data_genration", "pipelinedataset"))
+    
     parts = filename.split('_')
     if len(parts) >= 4:
         folder = parts[3]
     else:
-        # Fallback directory search
-        root_dir = os.path.join("data_genration", "pipelinedataset")
-        folder = None
-        for fld in os.listdir(root_dir):
-            if os.path.isdir(os.path.join(root_dir, fld)):
-                if filename in os.listdir(os.path.join(root_dir, fld)):
-                    folder = fld
-                    break
-        if not folder:
-            raise FileNotFoundError(f"Could not locate folder for file {filename}")
+        folder = "Unknown"
+        
+    label = get_label_from_folder(folder) if folder != "Unknown" else 0
 
-    file_path = os.path.join("data_genration", "pipelinedataset", folder, filename)
-
-    # Extract raw signal values
-    x_signal, y_signal = extract_signals(file_path)
+    if not has_full_data and os.path.exists(demo_path):
+        # Load from demo data
+        demo_data = np.load(demo_path)
+        x_signal = demo_data[f"{filename}_x"]
+        y_signal = demo_data[f"{filename}_y"]
+    else:
+        # Load from full dataset
+        if folder == "Unknown":
+            root_dir = os.path.join("data_genration", "pipelinedataset")
+            for fld in os.listdir(root_dir):
+                if os.path.isdir(os.path.join(root_dir, fld)):
+                    if filename in os.listdir(os.path.join(root_dir, fld)):
+                        folder = fld
+                        label = get_label_from_folder(folder)
+                        break
+        
+        file_path = os.path.join("data_genration", "pipelinedataset", folder, filename)
+        if not os.path.exists(file_path):
+             raise FileNotFoundError(f"Could not locate {file_path}")
+        x_signal, y_signal = extract_signals(file_path)
 
     # Create windows
     windows = create_windows(x_signal, y_signal, window_size)
 
-    # Actual label
-    label = get_label_from_folder(folder)
     return x_signal, y_signal, windows, label
 
 # Helper: make a clean light-background chart
