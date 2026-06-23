@@ -1,7 +1,5 @@
-# Ignore temporary files
-data_genration
+﻿# Ignore temporary files
+data_genration/*
+!data_genration/model/
 __pycache__
 z.py
-
-
-
