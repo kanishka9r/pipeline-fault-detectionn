@@ -1,16 +1,17 @@
 import torch
 import numpy as np
 from paderborn_loader import (load_dataset_with_files,to_fft)
-import random
-from model import CNNClassifier
-from gradCam import GradCAM
+from cnnlstm import CNNLSTMClassifier
+from gradcam import GradCAM
 import matplotlib.pyplot as plt
 from scipy.signal import resample
+from cnn import CNNGradCAM
 
 # CONFIG
 device = torch.device( "cuda" if torch.cuda.is_available()
     else "cpu"
 )
+test_files = np.load("data_genration/model/test_files.npy",allow_pickle=True)
 
 class_name = [
     "Healthy",
@@ -20,7 +21,7 @@ class_name = [
 ]
 
 # LOAD MODEL
-model = CNNClassifier(num_classes=4).to(device)
+model = CNNLSTMClassifier(num_classes=4).to(device)
 model.load_state_dict(
     torch.load(
         "data_genration/model/best_paderborn_cnn.pt",
@@ -30,14 +31,17 @@ model.load_state_dict(
 model.eval()
 
 # LOAD DATA
-x, y, file_ids = load_dataset_with_files(
-    "data_genration/pipelinedataset",
-    window_size=2048
-)
-x = np.array([
-    to_fft(w)
-    for w in x
-])
+x, y, file_ids = load_dataset_with_files("data_genration/pipelinedataset",window_size=2048)
+test_idx = np.isin(file_ids,test_files)
+x = x[test_idx]
+y = y[test_idx]
+file_ids = file_ids[test_idx]
+
+new_x = []
+for w in x:
+    fft_window = to_fft(w)
+    new_x.append(fft_window)
+x = np.array(new_x)
 
 # NORMALIZATION
 mean = np.load(
@@ -49,7 +53,9 @@ std = np.load(
 x = (x - mean) / std
 
 # PICK SAMPLE
-sample_idx = random.randint(0,len(x)-1)
+ball_idx = np.where(y == 3)[0]
+sample_idx = ball_idx[0]
+actual_class = y[sample_idx]
 sample = torch.tensor(
     x[sample_idx],
     dtype=torch.float32
@@ -80,41 +86,32 @@ for i, p in enumerate(
         f"{class_name[i]} : {p*100:.2f}%"
     )
 
+gradcam_model = CNNGradCAM(4).to(device)
+
+gradcam_model.load_state_dict(
+    torch.load(
+        "data_genration/model/best_gradcam_cnn.pt",
+        map_location=device
+    )
+)
+
+gradcam_model.eval()
 # GRADCAM
-gradcam = GradCAM(
-    model,
-    model.features[8]
-)
-cam, pred = gradcam.generate(
-    sample
-)
+gradcam = GradCAM(gradcam_model, gradcam_model.features[11])
+cam, gradcam_pred = gradcam.generate(sample)
 
 # FFT + GRADCAM OVERLAY
-fft_signal = sample.cpu().numpy()[0, :, 0]
-cam_resized = resample(
-    cam,
-    len(fft_signal)
-)
-cam_resized = (
-    cam_resized - cam_resized.min()
-) / (
-    cam_resized.max()
-    - cam_resized.min()
-    + 1e-8
-)
+fft_x = sample.cpu().numpy()[0, :, 0]
+fft_y = sample.cpu().numpy()[0, :, 1]
+cam_resized = resample(cam,len(fft_x))
+cam_resized = (cam_resized - cam_resized.min()) / (cam_resized.max()- cam_resized.min()+ 1e-8)
 
 plt.figure(figsize=(14,5))
-plt.plot(
-    fft_signal,
-    label="FFT Spectrum"
-)
-plt.plot(
-    cam_resized * np.max(fft_signal),
-    label="GradCAM Importance"
-)
-plt.title(
-    f"Prediction: {class_name[pred]}"
-)
+plt.plot(fft_x, label="FFT X")
+plt.plot(fft_y, label="FFT Y")
+scale = max(np.max(fft_x),np.max(fft_y))
+plt.plot(cam_resized * scale , label="GradCAM Importance")
+plt.title(f"Prediction: {class_name[pred_class]}")
 plt.xlabel("FFT Bin")
 plt.ylabel("Magnitude")
 plt.legend()
@@ -141,6 +138,15 @@ elif region_center < 400:
 else:
     region_text = "High Frequency Region"
 
+ #important freq range   
+Fs = 64000
+freq_resolution = Fs / 2048
+start_freq = start_bin * freq_resolution
+end_freq = end_bin * freq_resolution
+print(
+    f"Important Frequency Region: "
+    f"{start_freq:.0f} Hz - {end_freq:.0f} Hz"
+)
 #Output
 print(
     f"\nImportant FFT Region: "
@@ -158,7 +164,7 @@ elif confidence > 80:
 else:
     print(
         "Prediction should be reviewed manually."
-    )
+    ) 
 print(
     f"CNN focused on FFT region "
     f"{start_bin}-{end_bin}"
@@ -180,3 +186,7 @@ elif pred_class == 3:
     print(
         " Frequency distribution matches Ball Fault patterns."
     )
+
+print("Model Prediction :", class_name[pred_class])
+print("GradCAM Prediction:", class_name[gradcam_pred])
+print("Actual" , class_name[actual_class])

@@ -1,6 +1,7 @@
 # Ignore temporary files
 data_genration
 __pycache__
+z.py
 
 
 

@@ -1,12 +1,10 @@
 import torch.nn as nn
 
-# Define the CNN model for classification
-class CNNClassifier(nn.Module):
+class CNNGradCAM(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
 
         self.features = nn.Sequential(
-
             nn.Conv1d(2, 32, kernel_size=7, padding=3),
             nn.BatchNorm1d(32),
             nn.ReLU(),
@@ -19,38 +17,24 @@ class CNNClassifier(nn.Module):
 
             nn.Conv1d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm1d(128),
-            nn.ReLU()
-        )
+            nn.ReLU(),
 
-        self.lstm = nn.LSTM(
-            input_size=128,
-            hidden_size=128,
-            num_layers=1,
-            batch_first=True
-        )
+            nn.Conv1d(128, 256, kernel_size=3, padding=1), 
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+
+            nn.AdaptiveAvgPool1d(1) ) # take avg of each channel on time (batch size , 256 , 1) 
+        
 
         self.classifier = nn.Sequential(
-            nn.Linear(128, 64),
+            nn.Linear(256, 64),
             nn.ReLU(),
             nn.Dropout(0.4),
             nn.Linear(64, num_classes)
         )
 
     def forward(self, x):
-
-        # (B,1024,2) -> (B,2,1024)
         x = x.permute(0, 2, 1)
-
-        # CNN
         x = self.features(x)
-
-        # (B,128,L) -> (B,L,128)
-        x = x.permute(0, 2, 1)
-
-        # LSTM
-        lstm_out, (hidden, cell) = self.lstm(x)
-
-        # last hidden state
-        x = hidden[-1]
-
+        x = x.squeeze(-1)
         return self.classifier(x)

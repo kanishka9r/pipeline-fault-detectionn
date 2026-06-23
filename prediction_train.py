@@ -9,7 +9,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
-from model import CNNClassifier
+from cnnlstm import CNNLSTMClassifier
 from paderborn_loader import load_dataset_with_files, to_fft
 
 # Constants
@@ -37,6 +37,14 @@ x = np.array([to_fft(w) for w in x])
 unique_files = np.unique(file_ids)
 train_files, temp_files = train_test_split(unique_files, test_size=0.3, random_state=42)
 val_files, test_files = train_test_split(temp_files, test_size=0.5, random_state=42)
+# Save file splits
+np.save("data_genration/model/train_files.npy",train_files)
+np.save("data_genration/model/val_files.npy",val_files)
+np.save("data_genration/model/test_files.npy",test_files)
+print("File splits saved.")
+print("Train files:", len(train_files))
+print("Validation files:", len(val_files))
+print("Test files:", len(test_files))
 
 # true labels and data
 train_idx = np.isin(file_ids, train_files)
@@ -82,7 +90,7 @@ num_classes = len(np.unique(y))
 print("Num classes:", num_classes)
 
 #move model to device
-model = CNNClassifier(num_classes).to(device)
+model = CNNLSTMClassifier(num_classes).to(device)
 
 # Class weights (important for imbalance)
 class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(y_train.numpy()) ,y=y_train.numpy())

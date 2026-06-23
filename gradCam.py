@@ -37,7 +37,7 @@ class GradCAM:
         pred_class = output.argmax(dim=1)
         score = output[
             0,
-            pred_class.item()
+        pred_class.item()   
         ]
         score.backward()
         weights = torch.mean(
