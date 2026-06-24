@@ -72,7 +72,7 @@ This will open the dashboard in your default web browser.
 
 ### 3. Training the Model (Optional)
 If you have the full 3.3 GB `.mat` dataset and want to retrain the models from scratch:
-1. Place the dataset in `data_generation/pipelinedataset/`
+1. Place the dataset in `data_genration/pipelinedataset/`
 2. Run the training script:
    ```bash
    python prediction_train.py

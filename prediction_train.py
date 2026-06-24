@@ -168,7 +168,7 @@ for epoch in range(1, num_epoch + 1):
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         patience_cnt = 0
-        torch.save(model.state_dict(), "data_genration/reqdata/best_paderborn_cnn.pt")
+        torch.save(model.state_dict(), "data_genration/model/best_paderborn_cnn.pt")
         print(" Saved Best Model")
     else:
         patience_cnt += 1
