@@ -1,4 +1,4 @@
-# 🚀 Pipeline Bearing Fault Detection Dashboard
+# Pipeline Bearing Fault Detection
 
 An enterprise-grade, end-to-end machine learning pipeline and interactive dashboard for industrial bearing health monitoring. 
 
@@ -41,7 +41,7 @@ The project processes raw vibration streams through a two-stage pipeline:
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **Python 3.9+** (Core programming language)
 - **PyTorch** (Deep Learning framework for CNNs and Grad-CAM)
@@ -52,7 +52,7 @@ The project processes raw vibration streams through a two-stage pipeline:
 
 ---
 
-## 🚀 How to Run
+##  How to Run
 
 ### 1. Local Setup
 Clone the repository and install the required dependencies:
@@ -79,7 +79,7 @@ If you have the full 3.3 GB `.mat` dataset and want to retrain the models from s
 
 ---
 
-## 📈 Evaluation and Metrics
+##  Evaluation and Metrics
 
 The model's performance is rigorously evaluated exclusively on the isolated **Test Set**:
 - **Accuracy:** Achieves >98% accuracy on unseen test machines.
