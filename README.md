@@ -1,22 +1,22 @@
 # Pipeline Bearing Fault Detection
 
-An enterprise-grade, end-to-end machine learning pipeline and interactive dashboard for industrial bearing health monitoring. 
+A machine learning pipeline and interactive dashboard for industrial bearing health monitoring.
 
-This project utilizes the **Paderborn University Bearing Dataset** to perform supervised Fault Classification. By analyzing high-frequency vibration signals, it identifies early-stage degradation and provides precise diagnostics of failure modes, significantly reducing industrial downtime.
+This project implements an end-to-end intelligent fault diagnosis pipeline that processes vibration signals, extracts frequency-domain information, and applies deep learning models to learn complex degradation patterns in rotating machinery. The framework is designed to support accurate and interpretable machine condition monitoring.
 
 ---
 
-## ✨ Features
+## Features
 
 - **Interactive Cloud Dashboard:** A fully responsive, modern Streamlit web application for real-time visualization of vibration signals and fault predictions.
-- **Deep 1D-CNN Architecture:** Custom-built Convolutional Neural Network optimized specifically for time-series frequency data.
-- **Explainable AI (Grad-CAM):** Visualizes which specific frequencies the AI is looking at to make its predictions, ensuring transparent decision-making.
+- **Deep CNN-LSTM Architecture:** Uses a Convolutional Neural Network combined with Long Short-Term Memory (LSTM) layers for highly accurate time-series classification.
+- **Explainable AI (Grad-CAM):** Uses a parallel pure CNN model to visualize which specific frequencies the AI is looking at to make its predictions, ensuring transparent decision-making.
 - **Zero Data Leakage:** Strict file-level train/validation/test splitting guarantees the model generalizes reliably to unseen machinery.
 - **Lightweight Deployment:** Uses a compressed `.npz` demo dataset to bypass GitHub storage limits while maintaining full functionality on Streamlit Cloud.
 
 ---
 
-## 📊 Dataset Used
+## Dataset Used
 
 The system is optimized for the **Paderborn University (PU) Dataset**, focusing on high-frequency vibration data:
 - **Healthy State:** Baseline operating conditions without defects.
@@ -25,25 +25,26 @@ The system is optimized for the **Paderborn University (PU) Dataset**, focusing 
 
 ---
 
-## 🧠 Model Architecture
+##  Model Architecture
 
 The project processes raw vibration streams through a two-stage pipeline:
 
 ### 1. Data Engineering & Preprocessing
 - **Segmentation:** Continuous streams are partitioned into discrete 2048-sample windows.
+- **Envelope Analysis (Hilbert Transform):** Applied to the raw signals to extract the amplitude envelope, isolating fault-related impulses from the high-frequency carrier signal.
 - **Fast Fourier Transform (FFT):** Converts raw time-domain vibrations into the frequency domain, where fault harmonics are most prominent.
 - **Log-Scaling & Normalization:** Normalizes the dynamic range using standard scaling (`mean.npy` / `std.npy`) for stable neural network convergence.
 
 ### 2. Fault Classification (Deep 1D-CNN)
-- **Architecture:** 4-layer Deep 1D Convolutional Network with Batch Normalization and Dropout (0.4) for robust regularization.
-- **Optimization:** Trained using Adam optimizer, `ReduceLROnPlateau` scheduler, and balanced class weights to handle natural dataset imbalances.
-- **Outputs:** Softmax probability distribution across 4 states (Healthy, Outer Fault, Inner Fault, Ball Fault).
+- **Architecture:** Hybrid 1D-CNN and LSTM model with three convolutional layers, Batch Normalization, and Dropout (0.4) for robust feature learning and regularization.
+- **Optimization:** Trained using Adam optimizer, ReduceLROnPlateau scheduler, balanced class weights, and gradient clipping for stable learning.
+- **Outputs:** Softmax probability distribution across four bearing conditions: Healthy, Outer Fault, Inner Fault, and Ball Fault.
 
 ---
 
 ##  Tech Stack
 
-- **Python 3.9+** (Core programming language)
+- **Python 3.10+** (Core programming language)
 - **PyTorch** (Deep Learning framework for CNNs and Grad-CAM)
 - **Streamlit** (Frontend dashboard and UI)
 - **NumPy & Pandas** (Numerical operations and data manipulation)
@@ -67,7 +68,7 @@ To start the interactive web application, simply run:
 ```bash
 streamlit run dashboard.py
 ```
-This will open the dashboard in your default web browser (usually at `http://localhost:8501`).
+This will open the dashboard in your default web browser.
 
 ### 3. Training the Model (Optional)
 If you have the full 3.3 GB `.mat` dataset and want to retrain the models from scratch:
@@ -83,8 +84,9 @@ If you have the full 3.3 GB `.mat` dataset and want to retrain the models from s
 
 The model's performance is rigorously evaluated exclusively on the isolated **Test Set**:
 - **Accuracy:** Achieves >98% accuracy on unseen test machines.
+- **Precision & Recall:** Maintains 98% weighted precision and 98% weighted recall, indicating highly reliable fault identification with minimal false positives and missed detections.
 - **Confusion Matrix:** Tracks precise false-positive and false-negative rates across all fault types.
-- **Grad-CAM Heatmaps:** Validates that the model is detecting legitimate mechanical frequencies rather than memorizing background noise.
+- **Grad-CAM Visualization:** Generates class-specific activation maps and highlights important frequency bands associated with the predicted bearing condition.
 
 ---
 
