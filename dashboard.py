@@ -658,29 +658,37 @@ with tab2:
                 if len(file_windows) == 0:
                     continue
 
-                # Pick a random window from the file
-                w_idx = np.random.randint(0, len(file_windows))
-                w = file_windows[w_idx]
+                # Evaluate ALL windows in the file
+                window_preds = []
+                window_confs = []
+                for w in file_windows:
+                    # FFT & Normalize
+                    f_vals = to_fft(w)
+                    f_norm = (f_vals - mean) / std
 
-                # FFT & Normalize
-                f_vals = to_fft(w)
-                f_norm = (f_vals - mean) / std
+                    # Predict
+                    w_sample = torch.tensor(f_norm, dtype=torch.float32).unsqueeze(0).to(device)
+                    with torch.no_grad():
+                        w_out = model(w_sample)
+                        w_probs = torch.softmax(w_out, dim=1)
+                        w_conf, w_pred = torch.max(w_probs, dim=1)
+                    window_preds.append(w_pred.item())
+                    window_confs.append(w_conf.item())
 
-                # Predict
-                w_sample = torch.tensor(f_norm, dtype=torch.float32).unsqueeze(0).to(device)
-                with torch.no_grad():
-                    w_out = model(w_sample)
-                    w_probs = torch.softmax(w_out, dim=1)
-                    w_conf, w_pred = torch.max(w_probs, dim=1)
+                # Majority vote across all windows
+                vote_counts = np.bincount(window_preds, minlength=4)
+                final_pred = int(np.argmax(vote_counts))
+                avg_conf = np.mean(window_confs) * 100
 
                 results.append({
                     "Filename": fname,
                     "Actual Class": class_name[file_label],
-                    "Predicted Class": class_name[w_pred.item()],
-                    "Confidence (%)": w_conf.item() * 100,
-                    "Status": "Correct" if w_pred.item() == file_label else "Incorrect",
+                    "Predicted Class": class_name[final_pred],
+                    "Confidence (%)": avg_conf,
+                    "Windows": f"{vote_counts[final_pred]}/{len(file_windows)}",
+                    "Status": "Correct" if final_pred == file_label else "Incorrect",
                     "Actual_Idx": file_label,
-                    "Pred_Idx": w_pred.item()
+                    "Pred_Idx": final_pred
                 })
             except Exception as e:
                 st.warning(f"Failed to process {fname}: {e}")
@@ -709,7 +717,7 @@ with tab2:
                 # Show results table
                 st.markdown("### Evaluated Samples Details")
                 st.dataframe(
-                    df_res[["Filename", "Actual Class", "Predicted Class", "Confidence (%)", "Status"]],
+                    df_res[["Filename", "Actual Class", "Predicted Class", "Confidence (%)", "Windows", "Status"]],
                     use_container_width=True
                 )
 
