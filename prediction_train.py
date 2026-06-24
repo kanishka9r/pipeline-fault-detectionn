@@ -38,9 +38,9 @@ unique_files = np.unique(file_ids)
 train_files, temp_files = train_test_split(unique_files, test_size=0.3, random_state=42)
 val_files, test_files = train_test_split(temp_files, test_size=0.5, random_state=42)
 # Save file splits
-np.save("data_genration/model/train_files.npy",train_files)
-np.save("data_genration/model/val_files.npy",val_files)
-np.save("data_genration/model/test_files.npy",test_files)
+np.save("data_genration/reqdata/train_files.npy",train_files)
+np.save("data_genration/reqdata/val_files.npy",val_files)
+np.save("data_genration/reqdata/test_files.npy",test_files)
 print("File splits saved.")
 print("Train files:", len(train_files))
 print("Validation files:", len(val_files))
@@ -168,7 +168,7 @@ for epoch in range(1, num_epoch + 1):
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         patience_cnt = 0
-        torch.save(model.state_dict(), "data_genration/model/best_paderborn_cnn.pt")
+        torch.save(model.state_dict(), "data_genration/reqdata/best_paderborn_cnn.pt")
         print(" Saved Best Model")
     else:
         patience_cnt += 1
@@ -183,7 +183,7 @@ print(f"Total Training Time: {total_time:.2f} seconds")
 print(f"Average Time per Epoch: {total_time / epoch:.2f} seconds")
 
 # Final evaluation (load best and print classification report + regression MAE)
-model.load_state_dict(torch.load("data_genration/model/best_paderborn_cnn.pt" , map_location=device))
+model.load_state_dict(torch.load("data_genration/reqdata/best_paderborn_cnn.pt" , map_location=device))
 model.eval()
 all_pred = []
 all_true = []
@@ -222,5 +222,5 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-np.save("data_genration/model/mean.npy", mean)
-np.save("data_genration/model/std.npy",std)
+np.save("data_genration/reqdata/mean.npy", mean)
+np.save("data_genration/reqdata/std.npy",std)
