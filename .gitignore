@@ -1,5 +1,6 @@
 ﻿# Ignore temporary files
 data_genration/*
 !data_genration/model/
+!data_genration/traineddata/
 __pycache__
 z.py
