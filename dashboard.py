@@ -207,10 +207,6 @@ def get_categorized_test_files():
             load_path = model_path
             
         test_files = np.load(load_path, allow_pickle=True)
-        
-        # Randomly select a subset to keep the dashboard lightweight
-        np.random.seed(42)
-        test_files = np.random.choice(test_files, min(50, len(test_files)), replace=False)
 
     categorized = {
         "Healthy": [],
