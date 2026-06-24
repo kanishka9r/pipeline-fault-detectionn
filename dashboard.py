@@ -173,8 +173,12 @@ def load_models():
 @st.cache_resource
 def load_normalization_params():
     """Load and cache normalisation parameters (mean, std)."""
-    mean = np.load(os.path.join("data_genration", "model", "mean.npy"))
-    std = np.load(os.path.join("data_genration", "model", "std.npy"))
+    if os.path.exists(os.path.join("data_genration", "traineddata", "mean.npy")):
+        mean = np.load(os.path.join("data_genration", "traineddata", "mean.npy"))
+        std = np.load(os.path.join("data_genration", "traineddata", "std.npy"))
+    else:
+        mean = np.load(os.path.join("data_genration", "model", "mean.npy"))
+        std = np.load(os.path.join("data_genration", "model", "std.npy"))
     return mean, std
 
 @st.cache_data
@@ -188,7 +192,13 @@ def get_categorized_test_files():
         demo_data = np.load(demo_path)
         test_files = [k.replace('_x', '') for k in demo_data.files if k.endswith('_x')]
     else:
-        test_files = np.load(os.path.join("data_genration", "model", "test_files.npy"), allow_pickle=True)
+        # Check both the old model path and the new traineddata path
+        trained_path = os.path.join("data_genration", "traineddata", "test_files.npy")
+        model_path = os.path.join("data_genration", "model", "test_files.npy")
+        
+        load_path = trained_path if os.path.exists(trained_path) else model_path
+        test_files = np.load(load_path, allow_pickle=True)
+        
         # Randomly select a subset to keep the dashboard lightweight
         np.random.seed(42)
         test_files = np.random.choice(test_files, min(50, len(test_files)), replace=False)
