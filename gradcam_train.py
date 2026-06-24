@@ -93,7 +93,7 @@ print("Num classes:", num_classes)
 model = CNNGradCAM(num_classes).to(device)
 
 # Class weights (important for imbalance)
-class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(y_train.numpy()) ,y=y_train.numpy())
+class_weights = compute_class_weight(class_weight='balanced',classes=np.array([0, 1, 2, 3]) ,y=y_train.numpy())
 class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
 # defined criterion , optimizer , scheduler
