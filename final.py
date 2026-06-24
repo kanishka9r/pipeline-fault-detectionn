@@ -11,7 +11,7 @@ from cnn import CNNGradCAM
 device = torch.device( "cuda" if torch.cuda.is_available()
     else "cpu"
 )
-test_files = np.load("data_genration/model/test_files.npy",allow_pickle=True)
+test_files = np.load("data_genration/reqdata/test_files.npy",allow_pickle=True)
 
 class_name = [
     "Healthy",
@@ -45,10 +45,10 @@ x = np.array(new_x)
 
 # NORMALIZATION
 mean = np.load(
-        "data_genration/model/mean.npy"
+        "data_genration/reqdata/mean.npy"
     )
 std = np.load(
-        "data_genration/model/std.npy"
+        "data_genration/reqdata/std.npy"
     )
 x = (x - mean) / std
 
