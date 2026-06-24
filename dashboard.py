@@ -173,7 +173,10 @@ def load_models():
 @st.cache_resource
 def load_normalization_params():
     """Load and cache normalisation parameters (mean, std)."""
-    if os.path.exists(os.path.join("data_genration", "traineddata", "mean.npy")):
+    if os.path.exists(os.path.join("data_genration", "reqdata", "mean.npy")):
+        mean = np.load(os.path.join("data_genration", "reqdata", "mean.npy"))
+        std = np.load(os.path.join("data_genration", "reqdata", "std.npy"))
+    elif os.path.exists(os.path.join("data_genration", "traineddata", "mean.npy")):
         mean = np.load(os.path.join("data_genration", "traineddata", "mean.npy"))
         std = np.load(os.path.join("data_genration", "traineddata", "std.npy"))
     else:
@@ -192,11 +195,17 @@ def get_categorized_test_files():
         demo_data = np.load(demo_path)
         test_files = [k.replace('_x', '') for k in demo_data.files if k.endswith('_x')]
     else:
-        # Check both the old model path and the new traineddata path
+        req_path = os.path.join("data_genration", "reqdata", "test_files.npy")
         trained_path = os.path.join("data_genration", "traineddata", "test_files.npy")
         model_path = os.path.join("data_genration", "model", "test_files.npy")
         
-        load_path = trained_path if os.path.exists(trained_path) else model_path
+        if os.path.exists(req_path):
+            load_path = req_path
+        elif os.path.exists(trained_path):
+            load_path = trained_path
+        else:
+            load_path = model_path
+            
         test_files = np.load(load_path, allow_pickle=True)
         
         # Randomly select a subset to keep the dashboard lightweight
@@ -621,8 +630,19 @@ with tab2:
     val_size = st.slider("Evaluation Sample Size (Files)", min_value=5, max_value=50, value=20, step=5)
 
     if st.button("Run Batch Evaluation Report"):
-        # Load all test files
-        test_files_all = np.load(os.path.join("data_genration", "model", "test_files.npy"), allow_pickle=True)
+        # Check if we are running on Streamlit Cloud (using demo data)
+        has_full_data = os.path.exists(os.path.join("data_genration", "pipelinedataset"))
+        if has_full_data:
+            if os.path.exists(os.path.join("data_genration", "reqdata", "test_files.npy")):
+                test_files_all = np.load(os.path.join("data_genration", "reqdata", "test_files.npy"), allow_pickle=True)
+            elif os.path.exists(os.path.join("data_genration", "traineddata", "test_files.npy")):
+                test_files_all = np.load(os.path.join("data_genration", "traineddata", "test_files.npy"), allow_pickle=True)
+            else:
+                test_files_all = np.load(os.path.join("data_genration", "model", "test_files.npy"), allow_pickle=True)
+        else:
+            # If on cloud, only evaluate on the files included in the lightweight demo dataset
+            demo_data = np.load(os.path.join("data_genration", "model", "demo_signals.npz"))
+            test_files_all = [k.replace('_x', '') for k in demo_data.files if k.endswith('_x')]
 
         # Sample randomly
         sampled_files = np.random.choice(test_files_all, size=min(val_size, len(test_files_all)), replace=False)
