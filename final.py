@@ -129,19 +129,19 @@ end_bin = int(
     important_idx.max()
 )
 
-region_center = (start_bin + end_bin) / 2
-if region_center < 100:
-    region_text = "Low Frequency Region"
-elif region_center < 400:
-    region_text = "Mid Frequency Region"
-else:
-    region_text = "High Frequency Region"
-
  #important freq range   
 Fs = 64000
 freq_resolution = Fs / 2048
 start_freq = start_bin * freq_resolution
 end_freq = end_bin * freq_resolution
+
+center_freq_hz = (start_freq + end_freq) / 2
+if center_freq_hz < 1000:
+    region_text = "Low Frequency Region"
+elif center_freq_hz < 5000:
+    region_text = "Mid Frequency Region"
+else:
+    region_text = "High Frequency Region "
 print(
     f"Important Frequency Region: "
     f"{start_freq:.0f} Hz - {end_freq:.0f} Hz"

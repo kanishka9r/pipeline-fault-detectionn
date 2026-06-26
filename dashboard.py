@@ -173,15 +173,8 @@ def load_models():
 @st.cache_resource
 def load_normalization_params():
     """Load and cache normalisation parameters (mean, std)."""
-    if os.path.exists(os.path.join("data_genration", "reqdata", "mean.npy")):
-        mean = np.load(os.path.join("data_genration", "reqdata", "mean.npy"))
-        std = np.load(os.path.join("data_genration", "reqdata", "std.npy"))
-    elif os.path.exists(os.path.join("data_genration", "traineddata", "mean.npy")):
-        mean = np.load(os.path.join("data_genration", "traineddata", "mean.npy"))
-        std = np.load(os.path.join("data_genration", "traineddata", "std.npy"))
-    else:
-        mean = np.load(os.path.join("data_genration", "model", "mean.npy"))
-        std = np.load(os.path.join("data_genration", "model", "std.npy"))
+    mean = np.load(os.path.join("data_genration", "reqdata", "mean.npy"))
+    std = np.load(os.path.join("data_genration", "reqdata", "std.npy"))
     return mean, std
 
 @st.cache_data
@@ -195,17 +188,7 @@ def get_categorized_test_files():
         demo_data = np.load(demo_path)
         test_files = [k.replace('_x', '') for k in demo_data.files if k.endswith('_x')]
     else:
-        req_path = os.path.join("data_genration", "reqdata", "test_files.npy")
-        trained_path = os.path.join("data_genration", "traineddata", "test_files.npy")
-        model_path = os.path.join("data_genration", "model", "test_files.npy")
-        
-        if os.path.exists(req_path):
-            load_path = req_path
-        elif os.path.exists(trained_path):
-            load_path = trained_path
-        else:
-            load_path = model_path
-            
+        load_path = os.path.join("data_genration", "reqdata", "test_files.npy")
         test_files = np.load(load_path, allow_pickle=True)
 
     categorized = {
@@ -521,14 +504,13 @@ with tab1:
                 end_freq = end_bin * freq_resolution
                 freq_str = f"{start_freq:.0f} Hz - {end_freq:.0f} Hz"
 
-                region_center = (start_bin + end_bin) / 2
-                if region_center < 100:
+                center_freq_hz = ((start_bin + end_bin) / 2) * freq_resolution
+                if center_freq_hz < 1000:
                     region_str = "Low Frequency Region"
-                elif region_center < 400:
+                elif center_freq_hz < 5000:
                     region_str = "Mid Frequency Region"
                 else:
                     region_str = "High Frequency Region"
-
                 peak_bin = int(np.argmax(cam_resized))
                 peak_freq = peak_bin * freq_resolution
 
